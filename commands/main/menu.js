@@ -1,49 +1,31 @@
-const { createVCard } = require('../../lib/helpers');
-
 module.exports = {
-    name: 'menu',
-    category: 'Main',
-    async execute(m, sock, commands) {
-        // Send VCard first
-        const vcard = 'BEGIN:VCARD\n' + 'VERSION:3.0\n' + 
-                      'FN:WRONG TURN 6 ✔️\n' + 
-                      'ORG:STANYTZ;\n' + 
-                      'TEL;type=CELL;type=VOICE;waid=255712345678:+255 712 345 678\n' + 
-                      'END:VCARD';
-        
-        await sock.sendMessage(m.chat, { contacts: { displayName: 'WRONG TURN 6', contacts: [{ vcard }] } });
+  name: 'menu',
+  async execute(sock, msg, args) {
+    const from = msg.key.remoteJid;
+    const vcard = 'BEGIN:VCARD\nVERSION:3.0\nFN:WRONG TURN 6 ✔️\nORG:STANYTZ;\nEND:VCARD';
+    
+    await sock.sendMessage(from, { contacts: { displayName: 'STANYTZ', contacts: [{ vcard }] } });
 
-        let menuText = `┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n`;
-        menuText += `┃ 🥀 *Developer:* STANYTZ\n`;
-        menuText += `┃ 🥀 *Prefix:* Multi\n`;
-        menuText += `┃ 🥀 *Theme:* Obsidian Red\n`;
-        menuText += `┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+    let menu = `┏━━━━ 『 *WRONG TURN 6* 』 ━━━━┓\n`;
+    menu += `┃ 🥀 *Developer:* STANYTZ\n`;
+    menu += `┃ 🌷 *Theme:* Obsidian Red\n`;
+    menu += `┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
 
-        const categories = [...new Set(commands.map(cmd => cmd.category))];
+    const cats = {};
+    global.commands.forEach(c => {
+      if (!cats[c.category]) cats[c.category] = [];
+      cats[c.category].push(c.name);
+    });
 
-        categories.forEach(cat => {
-            menuText += `┏━━━〔 *${cat.toUpperCase()}* 〕━━━┓\n`;
-            const cmds = commands.filter(c => c.category === cat);
-            cmds.forEach(c => {
-                menuText += `┃ 🥀 .${c.name}\n`;
-            });
-            menuText += `┗━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-        });
-
-        menuText += `_©SINCE 2024 STANYTZ INDUSTRIES_`;
-
-        await sock.sendMessage(m.chat, { 
-            text: menuText,
-            contextInfo: {
-                externalAdReply: {
-                    title: "W R O N G  T U R N  6",
-                    body: "System Active: 24/7",
-                    thumbnailUrl: "https://telegra.ph/file/your-image-link.jpg",
-                    sourceUrl: "https://github.com/stanytz",
-                    mediaType: 1,
-                    renderLargerThumbnail: true
-                }
-            }
-        });
+    for (const [category, cmds] of Object.entries(cats)) {
+      menu += `┏━━━〔 *${category.toUpperCase()}* 〕━━━┓\n`;
+      cmds.forEach(name => menu += `┃ 🥀 .${name}\n`);
+      menu += `┗━━━━━━━━━━━━━━━━━━━━┛\n\n`;
     }
+
+    await sock.sendMessage(from, { 
+      text: menu,
+      contextInfo: { externalAdReply: { title: "STANYTZ BOT ACTIVE", body: "WRONG TURN 6", mediaType: 1, thumbnailUrl: "https://files.catbox.moe/0v7rju.jpg" }}
+    });
+  }
 };
