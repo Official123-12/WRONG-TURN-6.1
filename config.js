@@ -1,54 +1,163 @@
-const admin = require("firebase-admin");
-const { BufferJSON } = require("@whiskeysockets/baileys");
+const { 
+  default: makeWASocket, 
+  useMultiFileAuthState, 
+  DisconnectReason, 
+  makeCacheableSignalKeyStore,
+  fetchLatestBaileysVersion
+} = require("@whiskeysockets/baileys");
+const pino = require("pino");
+const express = require("express");
+const fs = require("fs-extra");
+const path = require("path");
+const { saveSession, getSession, db } = require("./config");
 
-// YOUR EXACT KEY WITH NEWLINE FIX APPLIED
-const serviceAccount = {
-  "type": "service_account",
-  "project_id": "stanybots",
-  "private_key_id": "746be8a70fe0db83f0436d9d030c46c47d7c84f6",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDcpy6S8a0fJbRT\n7mcDBeJgh1Q4i0M296SiI/fq6YkJ5adOh9zQd70Km5tLttt9IajHJ1NdSjZLSnGT\n3NSTsvUxB2PoWPSZtqsL0AyDLmoJx3PEGel5EBvPpD3NWfu9kaTdF9OMKuu2WZUj\nxW4S9HX0M9KAuSCdTFRVCWFozEqf2e+7Obhj8bFIUbUICjqLSh9SsKtxdGxJ9wq0\n6BttfemM2/GhseCuRfu7/0bmiYjbqAwGTEuw3uuKW6+r6sQV5+068E3yjAIgYj3B\n82v7Zwt8XytJfGa6CV+Kj1esHytQPJJ4+x5fpwW0b0mMq6y6Tp77+wiqXQwle5zB\n6rI5CzxnAgMBAAECggEAFEgpt8gPKbXFhZF8VoLL9CN8UlY6r2rD70NvHmCpAAfk\nAQvr+B2JetgixirgsffOE8BBoWmY5ALLvdOmloz0jLUpMco7cYWg400UWVqC1LNI\nqNXY6A/a/pMSOzXyNdKVXN07zL6FPBWv58HWBFgEH5ZD2yEpJkxF1CswkPl2QosR\n/zqeRYuYjWRica/ztaizNk+NC4cy7h0uqiLzA0BYJn/ZTkOypTkYvUafoQEKxtsp\nvZrEQ+d4p/2wLYF9SnWv218Y9b5fsZJESzaUQbNazNZwcNaSFFYmiY2dTm5pleOU\nPfFcYm8eQukVxcN4KORWc7BmUxaxBGHW+1mBSyX3QQKBgQD84KRIMODhT5sP3bel\nDFOVKOg3i6PhUMigkXrXJIUsHPibd63pnVEeXr850fVuRBVERXjpBlC+aMoA90Tz\nzaSLILPY5WIniePLH6ben5T3wC9iYU0wO3ZkwJqW1jZ47CfCnxrmv70TpuPP/kKc\nMnMDyxMpb4zCHzG6YREVIXYeRQKBgQDfYK1XtuVgaxMf+kjV2jp/U3t54uobPH3D\n65pDrnslLZfe6eNJ+woHlxKgTgFqJnMjLGff1Tu1e7t99CbieRfEplmCyNttzHdm\nKXyCzr+G+llgkNpvfIZHS6ZEksay41oTcO0JkSVpTCCxs2osOSICM6yhi9qnYvre\nE/7QOviguwKBgQDbJ2CYw+uQuKnc5T0LyBQD2BDwWo+rbJSDO7FnFNppMa5vJhhN\nty4fEOPPG1wFtPFtWnwAD54Ydr5ieemDFXx9qtjSp3EabRFC72px04GJ+T/XlhYM\nL+xaQuV2xa0tvRR0QelRg2g8yMz0bBmUPtCYv/0aUvd9IQW6zfa9BmPUtQKBgC42\nG+ZHihB2VlCJQMQtD2kD5kmC7heQXhxIA3P5BrTcR8zv6fuGGb8UO+A6AwToy2z9\ZMfjnySeYl1eQyUbFBW0rFPoJa0DXbge4QlWqDzOUesuTGJACq95MP6CtuSPMDVR\naVhPVMQB4cmhaleXwjdeZVpOSn/SdD+5Nz/w0zq9AoGAO7j7hc9SRacoTUU2MJOT\n6+y8q1hFUuOb+tb3LwHzkdQ5kyHyNs5PT0Ib994jAon7Ocfl8bL6ILtNDMBiKVXf\nkg3B0lPkRSW+cDAUAENasCH3OrQrlYVceYnmu/Yc2K3nOvoJS2BLiGa/aCjCPHE2\nNVhK+Ycb7OpMDt2fyWIkyEY=\n-----END PRIVATE KEY-----\n".replace(/\\n/g, '\n'), // CRITICAL FIX APPLIED HERE
-  "client_email": "firebase-adminsdk-fbsvc@stanybots.iam.gserviceaccount.com",
-  "client_id": "103847718279811211149",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40stanybots.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
+const app = express();
+global.commands = new Map();
+
+// 1. DYNAMIC COMMAND LOADER (With Safety)
+const loadCommands = () => {
+    try {
+        const cmdPath = path.join(__dirname, 'commands');
+        if (!fs.existsSync(cmdPath)) {
+            console.log("❌ Folder la 'commands' halipo! Nitatengeneza sasa...");
+            fs.mkdirSync(cmdPath);
+            return;
+        }
+
+        const categories = fs.readdirSync(cmdPath);
+        categories.forEach(cat => {
+            const catPath = path.join(cmdPath, cat);
+            if (fs.lstatSync(catPath).isDirectory()) {
+                const files = fs.readdirSync(catPath).filter(f => f.endsWith('.js'));
+                files.forEach(file => {
+                    try {
+                        const cmd = require(path.join(catPath, file));
+                        cmd.category = cat;
+                        global.commands.set(cmd.name, cmd);
+                    } catch (e) {
+                        console.error(`❌ Error loading command ${file}:`, e.message);
+                    }
+                });
+            }
+        });
+        console.log(`✅ ${global.commands.size} Commands Loaded Successfully!`);
+    } catch (err) {
+        console.error("CRITICAL ERROR IN COMMAND LOADER:", err);
+    }
 };
 
-// Initialize Firebase correctly
-if (!admin.apps.length) {
+// 2. MAIN ENGINE
+async function startBot(sessionId) {
     try {
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount)
+        const { version } = await fetchLatestBaileysVersion();
+        const { state, saveCreds } = await useMultiFileAuthState(`temp_${sessionId}`);
+        
+        const stored = await getSession(sessionId);
+        if (stored) state.creds = stored;
+
+        const sock = makeWASocket({
+            auth: {
+                creds: state.creds,
+                keys: makeCacheableSignalKeyStore(state.creds, pino({ level: 'fatal' })),
+            },
+            printQRInTerminal: false,
+            logger: pino({ level: 'silent' }),
+            browser: ["WRONG TURN 6", "Safari", "3.0.0"],
+            version
         });
-        console.log("🔥 Firebase Admin Connected Successfully");
-    } catch (error) {
-        console.error("❌ Firebase Initialization Error:", error);
+
+        sock.ev.on("creds.update", async () => {
+            await saveCreds();
+            await saveSession(sessionId, state.creds);
+        });
+
+        sock.ev.on("connection.update", async (update) => {
+            const { connection, lastDisconnect } = update;
+            if (connection === "open") {
+                console.log(`🚀 WRONG TURN 6 CONNECTED: ${sessionId}`);
+                sock.sendPresenceUpdate('available');
+            }
+            if (connection === "close") {
+                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+                if (shouldReconnect) {
+                    console.log("♻️ Reconnecting...");
+                    startBot(sessionId);
+                }
+            }
+        });
+
+        sock.ev.on("messages.upsert", async (m) => {
+            try {
+                const msg = m.messages[0];
+                if (!msg.message || msg.key.fromMe) return;
+
+                const from = msg.key.remoteJid;
+                const body = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").toLowerCase();
+
+                // Auto Status View
+                if (from === 'status@broadcast') {
+                    await sock.readMessages([msg.key]);
+                    await sock.sendMessage(from, { react: { text: '🥀', key: msg.key } }, { statusJidList: [msg.key.participant] });
+                }
+
+                // Command Handler
+                const prefix = ".";
+                if (body.startsWith(prefix)) {
+                    const [cmdName, ...args] = body.slice(1).trim().split(" ");
+                    const cmd = global.commands.get(cmdName);
+                    if (cmd) await cmd.execute(sock, msg, args);
+                }
+            } catch (err) {
+                console.error("Error in message upsert:", err);
+            }
+        });
+
+    } catch (err) {
+        console.error("FATAL ERROR IN STARTBOT:", err);
     }
 }
 
-const db = admin.firestore();
+// 3. EXPRESS & PAIRING
+app.use(express.static('public'));
 
-// Session Management with BufferJSON to prevent Binary Errors
-const saveSession = async (id, data) => {
+app.get('/pair', async (req, res) => {
     try {
-        const cleanData = JSON.parse(JSON.stringify(data, BufferJSON.replacer));
-        await db.collection('sessions').doc(id).set({ payload: cleanData }, { merge: true });
+        const phone = req.query.number;
+        if (!phone) return res.status(400).send({ error: "Missing number" });
+        const sid = `USER_${phone.replace(/\D/g, '')}`;
+        const sock = await startBot(sid);
+        
+        // Timeout kutoa code
+        setTimeout(async () => {
+            try {
+                const code = await sock.requestPairingCode(phone);
+                res.send({ code });
+            } catch (e) {
+                res.status(500).send({ error: "Pairing service busy" });
+            }
+        }, 6000);
+    } catch (err) {
+        res.status(500).send({ error: "Internal Server Error" });
+    }
+});
+
+// Auto-restore
+const restore = async () => {
+    try {
+        const snap = await db.collection('sessions').get();
+        snap.forEach(doc => startBot(doc.id));
     } catch (e) {
-        console.error("Error saving session to Firebase:", e);
+        console.log("No previous sessions found.");
     }
 };
 
-const getSession = async (id) => {
-    try {
-        const doc = await db.collection('sessions').doc(id).get();
-        if (!doc.exists) return null;
-        return JSON.parse(JSON.stringify(doc.data().payload), BufferJSON.reviver);
-    } catch (e) {
-        console.error("Error fetching session from Firebase:", e);
-        return null;
-    }
-};
+// Catch Uncaught Exceptions so the bot doesn't crash silently
+process.on('uncaughtException', (err) => {
+    console.error('SERVER CRASHED! Reason:', err);
+});
 
-module.exports = { db, saveSession, getSession };
+app.listen(3000, () => {
+    loadCommands();
+    restore();
+    console.log("✅ WRONG TURN 6 Server running on Port 3000");
+});
