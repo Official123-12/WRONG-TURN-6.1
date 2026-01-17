@@ -105,7 +105,7 @@ async function startBot(sessionId) {
 }
 
 // 3. EXPRESS SERVER & PAIRING
-app.use(express.static('views'));
+app.use(express.static('public'));
 
 app.get('/pair', async (req, res) => {
     const phone = req.query.number;
