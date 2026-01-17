@@ -1,1 +1,61 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WRONG TURN 6 | Pairing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #050505; color: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; overflow: hidden; user-select: none; }
+        .iphone-frame { border: 8px solid #1a1a1a; border-radius: 50px; height: 85vh; width: 380px; position: relative; background: rgba(20, 20, 20, 0.8); backdrop-filter: blur(20px); box-shadow: 0 0 50px rgba(255, 0, 0, 0.2); }
+        .dynamic-island { width: 120px; height: 35px; background: #000; border-radius: 20px; margin: 15px auto; }
+        .neon-text { text-shadow: 0 0 10px #ff0000; color: #ff3333; }
+        .glass-input { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 0, 0, 0.3); border-radius: 15px; padding: 15px; width: 100%; color: white; outline: none; }
+        .btn-link { background: linear-gradient(45deg, #ff0000, #8b0000); border-radius: 15px; font-weight: bold; transition: 0.3s; }
+        #pairingCode { font-family: monospace; letter-spacing: 5px; color: #00ff00; cursor: pointer; }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+    <div class="flex flex-col items-center justify-center min-h-screen p-4">
+        <div class="iphone-frame p-8 flex flex-col items-center">
+            <div class="dynamic-island"></div>
+            <div class="text-4xl mt-10 aesthetic-20090">🥀</div>
+            <h1 class="neon-text text-2xl font-bold mt-4">WRONG TURN 6</h1>
+            <p class="text-xs text-gray-500 mb-10">Developed by STANYTZ</p>
+
+            <div class="w-full space-y-6">
+                <input type="number" id="phoneNumber" placeholder="2557XXXXXXXX" class="glass-input text-center">
+                <button onclick="getPairingCode()" class="btn-link w-full py-4 shadow-lg shadow-red-900/50">LINK SYSTEM</button>
+            </div>
+
+            <div id="codeDisplay" class="mt-10 hidden text-center">
+                <p class="text-xs text-gray-400 mb-2">YOUR PAIRING CODE</p>
+                <div id="pairingCode" class="text-3xl font-bold p-4 bg-black rounded-lg" onclick="copyCode()">--------</div>
+            </div>
+
+            <div class="mt-auto text-[10px] text-gray-600 space-y-1 w-full border-t border-gray-800 pt-4">
+                <div class="flex justify-between"><span>ACTIVE USERS:</span><span id="userCount">1,402</span></div>
+                <div class="flex justify-between"><span>BOT UPTIME:</span><span>99.9%</span></div>
+                <div class="flex justify-between"><span>LATENCY:</span><span>24ms</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function getPairingCode() {
+            const num = document.getElementById('phoneNumber').value;
+            if(!num) return alert("Enter number!");
+            const res = await fetch(`/code?number=${num}`);
+            const data = await res.json();
+            document.getElementById('codeDisplay').classList.remove('hidden');
+            document.getElementById('pairingCode').innerText = data.code;
+        }
+        function copyCode() {
+            const code = document.getElementById('pairingCode').innerText;
+            navigator.clipboard.writeText(code);
+            alert("Code Copied!");
+        }
+    </script>
+</body>
+</html>
