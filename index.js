@@ -1,30 +1,45 @@
-const { default: makeWASocket, DisconnectReason, Browsers, delay, getContentType } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, DisconnectReason, Browsers, delay } = require('@whiskeysockets/baileys');
 const admin = require("firebase-admin");
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
 
+/** 
+ * WRONG TURN 6 - FIXED FIREBASE BASE64 
+ * BY STANYTZ
+ */
+
+// Hii hapa ni private_key yako ikiwa imefungwa kwenye Base64 kuzuia DER/ASN.1 Error
+const base64Key = "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2UUlCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktjd2dnU2pBZ0VBQW9JQkFRRGNweTZTOGEwZkpiUlQKN21jREJlSmdoMVE0aTBNMjk2U2lJL2ZxNllrUDVhZE9oOXpRZDcwS201dEx0dHQ5SWFqSEoxTmRTalpMU25HVAozTlNUc3ZVeEIyUG9XUFNa0XFzTDBBeURMbW9KeDNQRUdlbDVFQnBQcEQzTldmdTlrYVRkRjlPTUt1dTJXWlVqCnhXNFM5SFgwTTlLQXVTQ2RURlJWQ1dGZ3pFcWYyZSs3T2JoajhiRklVYlVJQ2pxTFNoOVN0S3R4ZEd4Sjl3cTAKNEJ0dGZlbU0yL0doc2VDdVJmdTcvMGJtaVlqYnFBd0dURXV3M3V1S1c2K3I2c1FWNiswNjhFM3lqQUlnWWozQgo4MnY3Wnd0OFh5dEpmR2E2Q1YrS2oxZXNHeXRRUEpKNCt4NWZwd1cwYjBtTXE2eTZUcDc3K3dpcVhuUXdsZTV6Qgo2ckk1Q3p4bkFnTUJBQUVDZ2dFQUZJZ3B0OGdQS2JYRWhaRjhWbExMOUNDOElsWTY2cjJENzBOdkhtQ3BBQWZrCkFRdnIrQjJKZXRneGlyaWdzZmZPRThCQm9XbVk1QUxMdmRPbWxve jBqTFVwTWNvN2NZV2c0MDBVV1ZxQzFMTkkKcTZYWDZBL2EvcE1TT3pYeU5kS1ZYTjA3ekw2RlBCVXY1OEhXQkZnRUg1WkQyeUVwSmtYMTFDc3drUGwyUW9zUgovenFlUll1WWpXUmljYS96dGFpek5rK05DNGN5N2gwdXFpTHpBMEJZSm4vWlRrT3lwVGtZdlV hZm9RRUt4dHNwCnaVckVStkNHAvMndMWUY5U25XdjIxOFk5YjVmczZKRVN6YVVRYm5hek56d2NOYVNGRlltaVkyZFRtNXBsZU9VClBmRmNZbThlUXVWVnhjTjRLT1JXYzdCbVV4YXhCR0hXKzFtQlN5WDNRUUtCZ1FEODRLUklNT0RoVDVzUDNiZWwKREZP dktPZzNpNlBoVU1pZ2tYclhKSlVzSFBpYmQ2M3BuVkVlWHI4NTBmVnVScFZFUlhkakJsQythTW9BOTBUegp6YVNMSUxQWTVXSW5pZVBMSDZicm41VDN3QzlpWVUwd08zWmt3SnFXMWpaNDdDZmpueHJtdjcwVHB1UFAva0tjCk1uTUR5eE1wYjR6Q0h6R zZZUkVWSVhZZVJRS0JnUURmYUsxWHR1VmdheE1mK2tqVjJqcC9VM3Q1NHVvYlBIM0QKNjVwRHJuc2xMWmZlNmVOSit3b0hseEtnVGdGcUpOTWpMR2ZmMVR1MWU3dDk5Q2JpZVJmRXBsbUN5TnR0ekhkbQpLWHlDenIrRytsbGdrTnB2ZklaSFM2WkVrc2F5NDFvVGNOTzBKSlNwVENDeHMyb3NPU0lDTTZ5aGk5cW5ZdnJlCkUvN1FPdmlndXdLQmdRRGJKMkNZdyt1UXVLbmM1VDBMeUJRRDJCRHdXbyt rYkpTRE83Rm5GTnBwTWE1dkpoaE4KdHk0ZkVPUE9HMTh3RnRQRnRud0FENTRZZHI1aWVlbURGWHg5cXRuU3AzRWFiUkZDNzJweDA0R0pUK1hsaFlNCkwreGFRdVYyeGEwdHZSUTBRZWxSZzJnOHlNejBiQm1VUHRSWXYvMGFVdmQ5SVFXNnpmYTlCbVBVdFFLQmdDNDIKRylaOWhCMlZsQ0pRTXREMmtENWttQzdoZVFYeElBM1A1QnJUY1I4enY2ZnVHR2I4VU8rQTZB d1RveTJ6OQpaTWZqbnlTZVlsMWVReVViRkJXMHJGUG9KYTBEMmJnZTRRbFdxRHpPVWVzdUdKQUNxOTU1TVA2Q3R1U1BNRFZSCmFWaFBWTVFCNGNtaGFsZVh3amRlWlZQT1NuL1NkNis1TnovdzB6cjlBb0dBTzdqN2hjOVNSYWNvVFVVMk1KT1QKNit5OHExaEZVdU9iK3RiM0x3SHprdVE1a3lIeU5zUFRQSGJiOTRqQW9uN09jZmw4Ykw2SUx0TkRNQmlLVlhmCmtnM0IwbFBrUlNXL2NEQVVB RU5hc0NIM09yUXJsWVZjZVlubXUvWWMySzNuT3ZvSlMyQkxpR2EvY0pqQ1BIRTIKTVZoSytZYmI3T3BNRHQyZnlXSWt5RVk9Ci0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0=";
+
 const serviceAccount = {
-    "project_id": "stanybots",
-    "client_email": "firebase-adminsdk-fbsvc@stanybots.iam.gserviceaccount.com",
-    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDcpy6S8a0fJbRT\n7mcDBeJgh1Q4i0M296SiI/fq6YkJ5adOh9zQd70Km5tLttt9IajHJ1NdSjZLSnGT\n3NSTsvUxB2PoWPSZtqsL0AyDLmoJx3PEGel5EBvPpD3NWfu9kaTdF9OMKuu2WZUj\nxW4S9HX0M9KAuSCdTFRVCWFozEqf2e+7Obhj8bFIUbUICjqLSh9SsKtxdGxJ9wq0\n6BttfemM2/GhseCuRfu7/0bmiYjbqAwGTEuw3uuKW6+r6sQV5+068E3yjAIgYj3B\n82v7Zwt8XytJfGa6CV+Kj1esHytQPJJ4+x5fpwW0b0mMq6y6Tp77+wiqXQwle5zB\n6rI5CzxnAgMBAAECggEAFEgpt8gPKbXFhZF8VoLL9CN8UlY6r2rD70NvHmCpAAfk\nAQvr+B2JetgixirgsffOE8BBoWmY5ALLvdOmloz0jLUpMco7cYWg400UWVqC1LNI\nqNXY6A/a/pMSOzXyNdKVXN07zL6FPBWv58HWBFgEH5ZD2yEpJkxF1CswkPl2QosR\n/zqeRYuYjWRica/ztaizNk+NC4cy7h0uqiLzA0BYJn/ZTkOypTkYvUafoQEKxtsp\nvZrEQ+d4p/2wLYF9SnWv218Y9b5fsZJESzaUQbNazNZwcNaSFFYmiY2dTm5pleOU\nPfFcYm8eQukVxcN4KORWc7BmUxaxBGHW+1mBSyX3QQKBgQD84KRIMODhT5sP3bel\nDFOVKOg3i6PhUMigkXrXJIUsHPibd63pnVEeXr850fVuRBVERXjpBlC+aMoA90Tz\nzaSLILPY5WIniePLH6ben5T3wC9iYU0wO3ZkwJqW1jZ47CfCnxrmv70TpuPP/kKc\nMnMDyxMpb4zCHzG6YREVIXYeRQKBgQDfYK1XtuVgaxMf+kjV2jp/U3t54uobPH3D\n65pDrnslLZfe6eNJ+woHlxKgTgFqJnMjLGff1Tu1e7t99CbieRfEplmCyNttzHdm\nKXyCzr+G+llgkNpvfIZHS6ZEksay41oTcO0JkSVpTCCxs2osOSICM6yhi9qnYvre\E/7QOviguwKBgQDbJ2CYw+uQuKnc5T0LyBQD2BDwWo+rbJSDO7FNppMa5vJhhN\nty4fEOPPG1wFtPFtWnwAD54Ydr5ieemDFXx9qtjSp3EabRFC72px04GJ+T/XlhYM\nL+xaQuV2xa0tvRR0QelRg2g8yMz0bBmUPtCYv/0aUvd9IQW6zfa9BmPUtQKBgC42\nG+ZHihB2VlCJQMQtD2kD5kmC7heQXhxIA3P5BrTcR8zv6fuGGb8UO+A6AwToy2z9\ZMfjnySeYl1eQyUbFBW0rFPoJa0DXbge4QlWqDzOUesuTGJACq95MP6CtuSPMDVR\naVhPVMQB4cmhaleXwjdeZVpOSn/SdD+5Nz/w0zq9AoGAO7j7hc9SRacoTUU2MJOT\n6+y8q1hFUuOb+tb3LwHzkdQ5kyHyNs5PT0Ib994jAon7Ocfl8bL6ILtNDMBiKVXf\nkg3B0lPkRSW+cDAUAENasCH3OrQrlYVceYnmu/Yc2K3nOvoJS2BLiGa/aCjCPHE2\nNVhK+Ycb7OpMDt2fyWIkyEY=\n-----END PRIVATE KEY-----\n".replace(/\\n/g, '\n')
+    projectId: "stanybots",
+    clientEmail: "firebase-adminsdk-fbsvc@stanybots.iam.gserviceaccount.com",
+    privateKey: Buffer.from(base64Key, 'base64').toString('ascii')
 };
 
-if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+// INITIALIZE FIREBASE
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
+}
 const db = admin.firestore();
 const commands = new Map();
 const sockCache = new Map();
 
+// COMMAND LOADER
 const loadCmds = () => {
-    if (!fs.existsSync('./commands')) fs.mkdirSync('./commands');
-    fs.readdirSync('./commands').forEach(dir => {
-        const dirPath = `./commands/${dir}`;
-        if (fs.lstatSync(dirPath).isDirectory()) {
-            fs.readdirSync(dirPath).forEach(file => {
+    const cmdPath = path.join(__dirname, 'commands');
+    if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
+    fs.readdirSync(cmdPath).forEach(folder => {
+        const folderPath = path.join(cmdPath, folder);
+        if (fs.lstatSync(folderPath).isDirectory()) {
+            fs.readdirSync(folderPath).forEach(file => {
                 if (file.endsWith('.js')) {
-                    const cmd = require(`${dirPath}/${file}`);
-                    cmd.category = dir;
+                    const cmd = require(path.join(folderPath, file));
+                    cmd.category = folder;
                     commands.set(cmd.name, cmd);
                 }
             });
@@ -33,10 +48,13 @@ const loadCmds = () => {
 };
 
 const app = express();
+app.use(express.static('public'));
+
 async function startBot() {
     loadCmds();
     const { useFirebaseAuthState } = require('./lib/firestoreAuth');
-    const { state, saveCreds } = await useFirebaseAuthState(db.collection("WRONG_TURN_6_SESSION"));
+    // Tumia collection "WT6_SESSIONS"
+    const { state, saveCreds } = await useFirebaseAuthState(db.collection("WT6_SESSIONS"));
     
     const sock = makeWASocket({
         auth: state,
@@ -64,7 +82,8 @@ async function startBot() {
 
         if (body.startsWith('.')) {
             const args = body.slice(1).trim().split(/ +/);
-            const cmd = commands.get(args.shift().toLowerCase());
+            const cmdName = args.shift().toLowerCase();
+            const cmd = commands.get(cmdName);
             if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), args);
         }
     });
@@ -73,12 +92,20 @@ async function startBot() {
     setInterval(() => sock.sendPresenceUpdate('available'), 20000);
 }
 
+// PAIRING CODE ROUTE
 app.get('/code', async (req, res) => {
     let s = sockCache.get("sock");
-    if (!s || !req.query.number) return res.status(400).send({ error: "System Error" });
-    let code = await s.requestPairingCode(req.query.number.replace(/\D/g, ''));
-    res.send({ code });
+    if (!s || !req.query.number) return res.status(400).send({ error: "System Not Ready" });
+    try {
+        let code = await s.requestPairingCode(req.query.number.replace(/\D/g, ''));
+        res.send({ code });
+    } catch (e) { res.status(500).send({ error: e.message }); }
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
-app.listen(process.env.PORT || 3000, startBot);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`🌐 WRONG TURN 6: Running on Port ${PORT}`);
+    startBot();
+});
