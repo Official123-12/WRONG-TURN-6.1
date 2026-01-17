@@ -1,61 +1,274 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WRONG TURN 6 | Pairing</title>
+    <title>WRONG TURN 6 | PAIRING</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background: #050505; color: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; overflow: hidden; user-select: none; }
-        .iphone-frame { border: 8px solid #1a1a1a; border-radius: 50px; height: 85vh; width: 380px; position: relative; background: rgba(20, 20, 20, 0.8); backdrop-filter: blur(20px); box-shadow: 0 0 50px rgba(255, 0, 0, 0.2); }
-        .dynamic-island { width: 120px; height: 35px; background: #000; border-radius: 20px; margin: 15px auto; }
-        .neon-text { text-shadow: 0 0 10px #ff0000; color: #ff3333; }
-        .glass-input { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 0, 0, 0.3); border-radius: 15px; padding: 15px; width: 100%; color: white; outline: none; }
-        .btn-link { background: linear-gradient(45deg, #ff0000, #8b0000); border-radius: 15px; font-weight: bold; transition: 0.3s; }
-        #pairingCode { font-family: monospace; letter-spacing: 5px; color: #00ff00; cursor: pointer; }
+        @import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Outfit:wght@300;400;600&display=swap');
+
+        body {
+            background: radial-gradient(circle at center, #1a0505 0%, #000000 100%);
+            color: #ffffff;
+            font-family: 'Outfit', sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .iphone-pro-max {
+            width: 360px;
+            height: 720px;
+            background: rgba(20, 20, 20, 0.6);
+            border: 8px solid #1f1f1f;
+            border-radius: 55px;
+            position: relative;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 0 40px rgba(255, 0, 0, 0.15), inset 0 0 20px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            border-bottom: 12px solid #1f1f1f;
+        }
+
+        .dynamic-island {
+            width: 110px;
+            height: 30px;
+            background: #000;
+            border-radius: 20px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 10;
+        }
+
+        .header-logo {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            border: 2px solid #ff0000;
+            margin: 20px auto 10px;
+            display: block;
+            box-shadow: 0 0 15px #ff0000;
+            object-fit: cover;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 10px #ff0000; }
+            50% { transform: scale(1.05); box-shadow: 0 0 25px #ff0000; }
+            100% { transform: scale(1); box-shadow: 0 0 10px #ff0000; }
+        }
+
+        .title {
+            font-family: 'Syncopate', sans-serif;
+            font-size: 1.2rem;
+            text-align: center;
+            letter-spacing: 4px;
+            color: #ff0000;
+            text-shadow: 0 0 10px #ff0000;
+            margin-bottom: 5px;
+        }
+
+        .dev-credit {
+            font-size: 0.7rem;
+            text-align: center;
+            color: #555;
+            letter-spacing: 2px;
+            margin-bottom: 30px;
+        }
+
+        .glass-input {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 0, 0, 0.2);
+            border-radius: 15px;
+            padding: 18px;
+            width: 100%;
+            color: white;
+            text-align: center;
+            font-size: 1rem;
+            outline: none;
+            transition: 0.3s;
+        }
+
+        .glass-input:focus {
+            border-color: #ff0000;
+            background: rgba(255, 0, 0, 0.05);
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.2);
+        }
+
+        .btn-link {
+            background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%);
+            color: white;
+            font-weight: bold;
+            border-radius: 15px;
+            padding: 15px;
+            width: 100%;
+            margin-top: 20px;
+            transition: 0.4s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 5px 15px rgba(255, 0, 0, 0.3);
+        }
+
+        .btn-link:active {
+            transform: scale(0.95);
+        }
+
+        #code-box {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 15px;
+            border: 1px dashed #ff0000;
+            text-align: center;
+            display: none;
+        }
+
+        #pairing-code {
+            font-family: monospace;
+            font-size: 2.5rem;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+            cursor: pointer;
+        }
+
+        .stats-container {
+            margin-top: auto;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 20px;
+            padding: 15px;
+            font-size: 0.75rem;
+            color: #888;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #00ff00;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+            box-shadow: 0 0 5px #00ff00;
+        }
+
+        .aesthetic-flower {
+            position: absolute;
+            bottom: 60px;
+            right: 20px;
+            font-size: 2rem;
+            opacity: 0.3;
+        }
     </style>
 </head>
 <body oncontextmenu="return false;">
-    <div class="flex flex-col items-center justify-center min-h-screen p-4">
-        <div class="iphone-frame p-8 flex flex-col items-center">
-            <div class="dynamic-island"></div>
-            <div class="text-4xl mt-10 aesthetic-20090">🥀</div>
-            <h1 class="neon-text text-2xl font-bold mt-4">WRONG TURN 6</h1>
-            <p class="text-xs text-gray-500 mb-10">Developed by STANYTZ</p>
 
-            <div class="w-full space-y-6">
-                <input type="number" id="phoneNumber" placeholder="2557XXXXXXXX" class="glass-input text-center">
-                <button onclick="getPairingCode()" class="btn-link w-full py-4 shadow-lg shadow-red-900/50">LINK SYSTEM</button>
+    <div class="iphone-pro-max">
+        <div class="dynamic-island"></div>
+        
+        <img src="https://files.catbox.moe/59ays3.jpg" alt="WT6 Logo" class="header-logo">
+        
+        <h1 class="title">WRONG TURN 6</h1>
+        <p class="dev-credit">BY STANYTZ</p>
+
+        <div class="space-y-4">
+            <input type="number" id="phoneNumber" placeholder="2557XXXXXXXX" class="glass-input">
+            <button onclick="getPairingCode()" id="submitBtn" class="btn-link">LINK SYSTEM</button>
+        </div>
+
+        <div id="code-box">
+            <p class="text-xs text-gray-500 mb-2">TAP CODE TO COPY</p>
+            <div id="pairing-code" onclick="copyCode()">--------</div>
+        </div>
+
+        <div class="aesthetic-flower">🥀</div>
+
+        <!-- Bot Performance & Active User Section -->
+        <div class="stats-container">
+            <div class="stat-item">
+                <span>SYSTEM STATUS:</span>
+                <span><span class="status-dot"></span>ONLINE</span>
             </div>
-
-            <div id="codeDisplay" class="mt-10 hidden text-center">
-                <p class="text-xs text-gray-400 mb-2">YOUR PAIRING CODE</p>
-                <div id="pairingCode" class="text-3xl font-bold p-4 bg-black rounded-lg" onclick="copyCode()">--------</div>
+            <div class="stat-item">
+                <span>ACTIVE USERS:</span>
+                <span id="userCount" class="text-white">1,842</span>
             </div>
-
-            <div class="mt-auto text-[10px] text-gray-600 space-y-1 w-full border-t border-gray-800 pt-4">
-                <div class="flex justify-between"><span>ACTIVE USERS:</span><span id="userCount">1,402</span></div>
-                <div class="flex justify-between"><span>BOT UPTIME:</span><span>99.9%</span></div>
-                <div class="flex justify-between"><span>LATENCY:</span><span>24ms</span></div>
+            <div class="stat-item">
+                <span>BOT UPTIME:</span>
+                <span class="text-white">99.9%</span>
+            </div>
+            <div class="stat-item">
+                <span>RESPONSE SPEED:</span>
+                <span class="text-white">24ms</span>
             </div>
         </div>
     </div>
 
     <script>
+        // Disable Right Click & Inspect
+        document.addEventListener('keydown', function(e) {
+            if(e.keyCode == 123 || (e.ctrlKey && e.shiftKey && e.keyCode == 73)) {
+                e.preventDefault();
+            }
+        });
+
         async function getPairingCode() {
             const num = document.getElementById('phoneNumber').value;
-            if(!num) return alert("Enter number!");
-            const res = await fetch(`/code?number=${num}`);
-            const data = await res.json();
-            document.getElementById('codeDisplay').classList.remove('hidden');
-            document.getElementById('pairingCode').innerText = data.code;
+            const btn = document.getElementById('submitBtn');
+            const codeBox = document.getElementById('code-box');
+            const codeDisplay = document.getElementById('pairing-code');
+
+            if (!num) return alert("Please enter your WhatsApp number!");
+
+            btn.innerText = "CONNECTING...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/code?number=' + num);
+                const data = await response.json();
+                
+                if (data.code) {
+                    codeBox.style.display = "block";
+                    codeDisplay.innerText = data.code;
+                    btn.innerText = "CONNECTED";
+                } else {
+                    alert("Error fetching code. Try again.");
+                    btn.innerText = "LINK SYSTEM";
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                alert("Server Error. Check console.");
+                btn.innerText = "LINK SYSTEM";
+                btn.disabled = false;
+            }
         }
+
         function copyCode() {
-            const code = document.getElementById('pairingCode').innerText;
-            navigator.clipboard.writeText(code);
-            alert("Code Copied!");
+            const code = document.getElementById('pairing-code').innerText;
+            if (code === "--------") return;
+            
+            navigator.clipboard.writeText(code).then(() => {
+                alert("Pairing Code copied: " + code);
+            });
         }
+
+        // Live User Simulation Effect
+        setInterval(() => {
+            const count = document.getElementById('userCount');
+            let current = parseInt(count.innerText.replace(',', ''));
+            let drift = Math.floor(Math.random() * 5) - 2;
+            count.innerText = (current + drift).toLocaleString();
+        }, 5000);
     </script>
 </body>
 </html>
