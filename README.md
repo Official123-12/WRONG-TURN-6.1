@@ -1,4 +1,4 @@
-# ┏━━━━━━ 『 WRONG TURN 6 』 ━━━━━━┓
+# ┏━ WRONG TURN 6 ━┓
 <p align="center">
   <img src="https://files.catbox.moe/0v7rju.jpg" width="200" height="200" style="border-radius: 50%;">
 </p>
