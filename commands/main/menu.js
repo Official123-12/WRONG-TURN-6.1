@@ -25,7 +25,7 @@ module.exports = {
 
     await sock.sendMessage(from, { 
       text: menu,
-      contextInfo: { externalAdReply: { title: "STANYTZ BOT ACTIVE", body: "WRONG TURN 6", mediaType: 1, thumbnailUrl: "https://chatgpt.com/s/m_696c0db153ac8191886a3b6a250c00d6" }}
+      contextInfo: { externalAdReply: { title: "STANYTZ BOT ACTIVE", body: "WRONG TURN 6", mediaType: 1, thumbnailUrl: "https://files.catbox.moe/59ays3.jpg" }}
     });
   }
 };
