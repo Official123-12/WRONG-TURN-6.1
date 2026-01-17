@@ -14,7 +14,7 @@ const serviceAccount = {
 
 if (!admin.apps.length) {
     admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-    console.log("👋❤️🫶 Firebase Initialized Successfully");
+    console.log("🔥 Firebase Initialized Successfully");
 }
 const db = admin.firestore();
 
