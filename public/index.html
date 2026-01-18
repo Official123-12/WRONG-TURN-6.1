@@ -6,11 +6,11 @@
     <title>WRONG TURN 6 | PAIRING</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Outfit:wght@300;400;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
 
         body {
-            background: radial-gradient(circle at center, #1a0505 0%, #000000 100%);
-            color: #ffffff;
+            background: #000;
+            color: #fff;
             font-family: 'Outfit', sans-serif;
             height: 100vh;
             display: flex;
@@ -18,22 +18,22 @@
             align-items: center;
             overflow: hidden;
             user-select: none;
-            -webkit-user-select: none;
         }
 
-        .iphone-pro-max {
-            width: 360px;
-            height: 720px;
-            background: rgba(20, 20, 20, 0.6);
-            border: 8px solid #1f1f1f;
+        /* iOS 26 Pro Max Frame */
+        .iphone-frame {
+            width: 350px;
+            height: 700px;
+            background: rgba(15, 15, 15, 0.9);
+            border: 8px solid #222;
             border-radius: 55px;
             position: relative;
-            backdrop-filter: blur(20px);
-            box-shadow: 0 0 40px rgba(255, 0, 0, 0.15), inset 0 0 20px rgba(0,0,0,0.5);
+            backdrop-filter: blur(25px);
+            box-shadow: 0 0 50px rgba(255, 0, 0, 0.2);
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            padding: 20px;
-            border-bottom: 12px solid #1f1f1f;
+            align-items: center;
         }
 
         .dynamic-island {
@@ -41,234 +41,206 @@
             height: 30px;
             background: #000;
             border-radius: 20px;
-            margin: 0 auto;
-            position: relative;
-            z-index: 10;
+            margin-bottom: 25px;
         }
 
-        .header-logo {
-            width: 90px;
-            height: 90px;
+        .logo-rounded {
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
             border: 2px solid #ff0000;
-            margin: 20px auto 10px;
-            display: block;
-            box-shadow: 0 0 15px #ff0000;
             object-fit: cover;
-            animation: pulse 2s infinite;
+            box-shadow: 0 0 20px #ff0000;
+            margin-bottom: 15px;
         }
 
-        @keyframes pulse {
-            0% { transform: scale(1); box-shadow: 0 0 10px #ff0000; }
-            50% { transform: scale(1.05); box-shadow: 0 0 25px #ff0000; }
-            100% { transform: scale(1); box-shadow: 0 0 10px #ff0000; }
-        }
-
-        .title {
-            font-family: 'Syncopate', sans-serif;
-            font-size: 1.2rem;
-            text-align: center;
-            letter-spacing: 4px;
+        .neon-title {
             color: #ff0000;
+            font-weight: 700;
+            letter-spacing: 5px;
             text-shadow: 0 0 10px #ff0000;
-            margin-bottom: 5px;
-        }
-
-        .dev-credit {
-            font-size: 0.7rem;
-            text-align: center;
-            color: #555;
-            letter-spacing: 2px;
-            margin-bottom: 30px;
+            font-size: 1.2rem;
         }
 
         .glass-input {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 0, 0, 0.2);
+            width: 90%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #333;
             border-radius: 15px;
-            padding: 18px;
-            width: 100%;
-            color: white;
+            padding: 15px;
+            color: #fff;
             text-align: center;
-            font-size: 1rem;
             outline: none;
+            margin-top: 30px;
             transition: 0.3s;
         }
 
         .glass-input:focus {
             border-color: #ff0000;
-            background: rgba(255, 0, 0, 0.05);
-            box-shadow: 0 0 15px rgba(255, 0, 0, 0.2);
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
         }
 
-        .btn-link {
-            background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%);
-            color: white;
-            font-weight: bold;
-            border-radius: 15px;
+        .link-btn {
+            width: 90%;
             padding: 15px;
-            width: 100%;
-            margin-top: 20px;
-            transition: 0.4s;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            box-shadow: 0 5px 15px rgba(255, 0, 0, 0.3);
-        }
-
-        .btn-link:active {
-            transform: scale(0.95);
-        }
-
-        #code-box {
-            margin-top: 30px;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.4);
+            background: linear-gradient(45deg, #ff0000, #8b0000);
             border-radius: 15px;
+            font-weight: bold;
+            margin-top: 20px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 5px 15px rgba(255, 0, 0, 0.4);
+        }
+
+        /* Pairing Code Display */
+        #code-display {
+            width: 90%;
+            margin-top: 40px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 20px;
             border: 1px dashed #ff0000;
-            text-align: center;
             display: none;
+            text-align: center;
         }
 
         #pairing-code {
-            font-family: monospace;
-            font-size: 2.5rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 2.2rem;
             color: #00ff00;
-            text-shadow: 0 0 10px #00ff00;
+            font-weight: bold;
+            letter-spacing: 3px;
             cursor: pointer;
+            text-shadow: 0 0 15px #00ff00;
         }
 
-        .stats-container {
+        .stats-box {
             margin-top: auto;
+            width: 90%;
             background: rgba(255, 255, 255, 0.02);
             border-radius: 20px;
             padding: 15px;
-            font-size: 0.75rem;
-            color: #888;
+            font-size: 0.7rem;
+            color: #666;
+            margin-bottom: 10px;
         }
 
-        .stat-item {
+        .stat-line {
             display: flex;
             justify-content: space-between;
             margin-bottom: 5px;
         }
 
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background: #00ff00;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 5px;
-            box-shadow: 0 0 5px #00ff00;
-        }
-
         .aesthetic-flower {
             position: absolute;
-            bottom: 60px;
-            right: 20px;
-            font-size: 2rem;
-            opacity: 0.3;
+            bottom: 80px;
+            right: 30px;
+            font-size: 1.5rem;
+            opacity: 0.4;
         }
     </style>
 </head>
 <body oncontextmenu="return false;">
 
-    <div class="iphone-pro-max">
+    <div class="iphone-frame">
         <div class="dynamic-island"></div>
         
-        <img src="https://files.catbox.moe/59ays3.jpg" alt="WT6 Logo" class="header-logo">
+        <!-- Logo Duara -->
+        <img src="https://files.catbox.moe/59ays3.jpg" alt="WT6 Logo" class="logo-rounded">
         
-        <h1 class="title">WRONG TURN 6</h1>
-        <p class="dev-credit">BY STANYTZ</p>
+        <h1 class="neon-title">WRONG TURN 6</h1>
+        <p class="text-[10px] text-gray-600 tracking-widest mt-1">BY STANYTZ</p>
 
-        <div class="space-y-4">
-            <input type="number" id="phoneNumber" placeholder="2557XXXXXXXX" class="glass-input">
-            <button onclick="getPairingCode()" id="submitBtn" class="btn-link">LINK SYSTEM</button>
-        </div>
+        <input type="number" id="phone" placeholder="2557XXXXXXXX" class="glass-input">
+        
+        <button onclick="getPairingCode()" id="submit-btn" class="link-btn">
+            LINK SYSTEM
+        </button>
 
-        <div id="code-box">
-            <p class="text-xs text-gray-500 mb-2">TAP CODE TO COPY</p>
-            <div id="pairing-code" onclick="copyCode()">--------</div>
+        <!-- Sehemu ya kuonyesha Code -->
+        <div id="code-display">
+            <p class="text-[10px] text-gray-500 mb-2">TAP CODE TO COPY</p>
+            <div id="pairing-code" onclick="copyToClipboard()">--------</div>
         </div>
 
         <div class="aesthetic-flower">🥀</div>
 
-        <!-- Bot Performance & Active User Section -->
-        <div class="stats-container">
-            <div class="stat-item">
-                <span>SYSTEM STATUS:</span>
-                <span><span class="status-dot"></span>ONLINE</span>
+        <!-- Bot Stats -->
+        <div class="stats-box">
+            <div class="stat-line">
+                <span>BOT STATUS:</span>
+                <span class="text-green-500">ONLINE</span>
             </div>
-            <div class="stat-item">
+            <div class="stat-line">
                 <span>ACTIVE USERS:</span>
-                <span id="userCount" class="text-white">1,842</span>
+                <span id="active-users" class="text-white">1,504</span>
             </div>
-            <div class="stat-item">
-                <span>BOT UPTIME:</span>
+            <div class="stat-line">
+                <span>UPTIME:</span>
                 <span class="text-white">99.9%</span>
-            </div>
-            <div class="stat-item">
-                <span>RESPONSE SPEED:</span>
-                <span class="text-white">24ms</span>
             </div>
         </div>
     </div>
 
     <script>
-        // Disable Right Click & Inspect
-        document.addEventListener('keydown', function(e) {
-            if(e.keyCode == 123 || (e.ctrlKey && e.shiftKey && e.keyCode == 73)) {
-                e.preventDefault();
-            }
-        });
-
         async function getPairingCode() {
-            const num = document.getElementById('phoneNumber').value;
-            const btn = document.getElementById('submitBtn');
-            const codeBox = document.getElementById('code-box');
-            const codeDisplay = document.getElementById('pairing-code');
+            const phoneNumber = document.getElementById('phone').value;
+            const btn = document.getElementById('submit-btn');
+            const codeDisplay = document.getElementById('code-display');
+            const codeText = document.getElementById('pairing-code');
 
-            if (!num) return alert("Please enter your WhatsApp number!");
+            if (!phoneNumber) {
+                alert("Please enter your WhatsApp number!");
+                return;
+            }
 
-            btn.innerText = "CONNECTING...";
+            btn.innerText = "GENERATING...";
             btn.disabled = true;
 
             try {
-                const response = await fetch('/code?number=' + num);
+                // Fetch code kutoka index.js
+                const response = await fetch(`/code?number=${phoneNumber}`);
                 const data = await response.json();
-                
+
                 if (data.code) {
-                    codeBox.style.display = "block";
-                    codeDisplay.innerText = data.code;
-                    btn.innerText = "CONNECTED";
+                    codeDisplay.style.display = "block";
+                    codeText.innerText = data.code;
+                    btn.innerText = "SUCCESS";
                 } else {
-                    alert("Error fetching code. Try again.");
+                    alert("Error: " + (data.error || "Failed to get code"));
                     btn.innerText = "LINK SYSTEM";
                     btn.disabled = false;
                 }
             } catch (err) {
-                alert("Server Error. Check console.");
+                alert("Server Error. Check Render Logs.");
                 btn.innerText = "LINK SYSTEM";
                 btn.disabled = false;
             }
         }
 
-        function copyCode() {
+        function copyToClipboard() {
             const code = document.getElementById('pairing-code').innerText;
             if (code === "--------") return;
             
             navigator.clipboard.writeText(code).then(() => {
-                alert("Pairing Code copied: " + code);
+                alert("Pairing Code copied to clipboard: " + code);
             });
         }
 
-        // Live User Simulation Effect
+        // Live stats simulation
         setInterval(() => {
-            const count = document.getElementById('userCount');
-            let current = parseInt(count.innerText.replace(',', ''));
-            let drift = Math.floor(Math.random() * 5) - 2;
-            count.innerText = (current + drift).toLocaleString();
+            const userEl = document.getElementById('active-users');
+            let current = parseInt(userEl.innerText.replace(',', ''));
+            userEl.innerText = (current + (Math.floor(Math.random() * 3) - 1)).toLocaleString();
         }, 5000);
+
+        // Security
+        document.addEventListener('keydown', function(e) {
+            if(e.ctrlKey && (e.key === 'u' || e.key === 's' || e.key === 'i')) {
+                e.preventDefault();
+            }
+        });
     </script>
 </body>
 </html>
