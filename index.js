@@ -7,27 +7,13 @@ const {
     fetchLatestBaileysVersion,
     BufferJSON 
 } = require('@whiskeysockets/baileys');
-const { initializeApp } = require('firebase/app');
-const { getFirestore, doc, getDoc, setDoc, deleteDoc } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
-const Jimp = require('jimp');
 
-// FIREBASE WEB CONFIG
-const firebaseConfig = {
-    apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
-    authDomain: "stanybots.firebaseapp.com",
-    projectId: "stanybots",
-    storageBucket: "stanybots.firebasestorage.app",
-    messagingSenderId: "381983533939",
-    appId: "1:381983533939:web:e6cc9445137c74b99df306"
-};
-
-// FIX: Simple Firebase initialization
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
+// HATA HAPA - Ondoa Firebase kabisa kwa sasa kujaribu
+// Weka data kwenye local file kwanza
 
 const app = express();
 const commands = new Map();
@@ -55,73 +41,69 @@ const loadCmds = () => {
     console.log(`📡 WRONG TURN 6: ${commands.size} COMMANDS ARMED`);
 };
 
-// 2. FIREBASE AUTH STATE - SIMPLE VERSION
-async function useFirebaseAuthState(db, collectionName) {
-    const fixId = (id) => id.replace(/\//g, '__').replace(/\@/g, 'at');
-    
-    const writeData = async (data, id) => {
-        try {
-            await setDoc(doc(db, collectionName, fixId(id)), data);
-            return true;
-        } catch (e) {
-            console.error('Write error:', e.code);
-            return false;
-        }
-    };
-    
-    const readData = async (id) => {
-        try {
-            const snapshot = await getDoc(doc(db, collectionName, fixId(id)));
-            return snapshot.exists() ? snapshot.data() : null;
-        } catch (e) {
-            console.error('Read error:', e.code);
-            return null;
-        }
-    };
-    
-    const removeData = async (id) => {
-        try {
-            await deleteDoc(doc(db, collectionName, fixId(id)));
-            return true;
-        } catch (e) {
-            console.error('Remove error:', e.code);
-            return false;
-        }
-    };
-    
-    let creds = await readData('creds');
-    if (!creds) {
-        creds = require('@whiskeysockets/baileys').initAuthCreds();
-        await writeData(creds, 'creds');
+// 2. SIMPLE LOCAL FILE AUTH STATE (Temporary fix)
+async function useLocalAuthState() {
+    const authFolder = path.join(__dirname, 'auth_info');
+    if (!fs.existsSync(authFolder)) {
+        fs.mkdirSync(authFolder, { recursive: true });
     }
-    
+
+    const credsPath = path.join(authFolder, 'creds.json');
+    const keysPath = path.join(authFolder, 'keys.json');
+
+    let creds = {};
+    let keys = {};
+
+    // Read existing data
+    if (fs.existsSync(credsPath)) {
+        try {
+            creds = JSON.parse(fs.readFileSync(credsPath, 'utf-8'));
+        } catch (e) {
+            console.log('No existing credentials found');
+        }
+    }
+
+    if (fs.existsSync(keysPath)) {
+        try {
+            keys = JSON.parse(fs.readFileSync(keysPath, 'utf-8'));
+        } catch (e) {
+            console.log('No existing keys found');
+        }
+    }
+
     return {
-        state: { 
-            creds, 
+        state: {
+            creds: creds || require('@whiskeysockets/baileys').initAuthCreds(),
             keys: {
                 get: async (type, ids) => {
                     const data = {};
                     for (const id of ids) {
-                        const value = await readData(`${type}-${id}`);
-                        data[id] = value;
+                        const key = `${type}-${id}`;
+                        if (keys[key]) {
+                            data[id] = keys[key];
+                        }
                     }
                     return data;
                 },
                 set: async (data) => {
                     for (const type in data) {
                         for (const id in data[type]) {
+                            const key = `${type}-${id}`;
                             const value = data[type][id];
                             if (value) {
-                                await writeData(value, `${type}-${id}`);
+                                keys[key] = value;
                             } else {
-                                await removeData(`${type}-${id}`);
+                                delete keys[key];
                             }
                         }
                     }
+                    fs.writeFileSync(keysPath, JSON.stringify(keys, null, 2));
                 }
             }
         },
-        saveCreds: () => writeData(creds, 'creds')
+        saveCreds: () => {
+            fs.writeFileSync(credsPath, JSON.stringify(creds, null, 2));
+        }
     };
 }
 
@@ -130,13 +112,14 @@ async function startBot() {
     loadCmds();
     
     try {
-        const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS");
+        console.log('🚀 Starting WRONG TURN 6...');
+        const { state, saveCreds } = await useLocalAuthState();
         const { version } = await fetchLatestBaileysVersion();
 
         sock = makeWASocket({
             auth: state,
             version,
-            logger: pino({ level: 'silent' }),
+            logger: pino({ level: 'error' }),
             browser: Browsers.macOS("Safari"),
             printQRInTerminal: false,
             markOnlineOnConnect: true
@@ -163,8 +146,10 @@ async function startBot() {
             }
             
             if (connection === 'close') {
+                console.log('❌ Connection closed:', lastDisconnect?.error?.message);
                 const reason = lastDisconnect?.error?.output?.statusCode;
                 if (reason !== DisconnectReason.loggedOut) {
+                    console.log('🔄 Reconnecting in 5 seconds...');
                     setTimeout(startBot, 5000);
                 }
             }
@@ -183,9 +168,15 @@ async function startBot() {
 
             // Anti-Link (Delete links for non-admins)
             if (/(https?:\/\/[^\s]+)/g.test(body) && from.endsWith('@g.us')) {
-                const metadata = await sock.groupMetadata(from);
-                const isBotAdmin = metadata.participants.find(p => p.id === sock.user.id.split(':')[0] + '@s.whatsapp.net')?.admin;
-                if (isBotAdmin) return await sock.sendMessage(from, { delete: m.key });
+                try {
+                    const metadata = await sock.groupMetadata(from);
+                    const isBotAdmin = metadata.participants.find(p => p.id === sock.user.id.split(':')[0] + '@s.whatsapp.net')?.admin;
+                    if (isBotAdmin) {
+                        await sock.sendMessage(from, { delete: m.key });
+                    }
+                } catch (error) {
+                    // Silent fail
+                }
             }
 
             // Status Handler
@@ -204,15 +195,34 @@ async function startBot() {
                 const args = body.slice(1).trim().split(/ +/);
                 const cmdName = args.shift().toLowerCase();
                 const cmd = commands.get(cmdName);
-                if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), args);
+                if (cmd) {
+                    try {
+                        await cmd.execute(m, sock, Array.from(commands.values()), args);
+                    } catch (error) {
+                        console.error(`Command error: ${error.message}`);
+                    }
+                }
             }
         });
 
-        sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
-        setInterval(() => { if (sock?.user) sock.sendPresenceUpdate('available'); }, 15000);
+        sock.ev.on('call', async (c) => {
+            if (c[0]) {
+                await sock.rejectCall(c[0].id, c[0].from);
+            }
+        });
         
+        // Keep alive
+        setInterval(() => {
+            if (sock?.user) {
+                sock.sendPresenceUpdate('available');
+            }
+        }, 15000);
+
+        console.log('🤖 Bot started successfully!');
+
     } catch (error) {
-        console.error('Start error:', error.message);
+        console.error('❌ Fatal error:', error.message);
+        console.log('🔄 Restarting in 10 seconds...');
         setTimeout(startBot, 10000);
     }
 }
@@ -222,23 +232,74 @@ app.get('/code', async (req, res) => {
     let num = req.query.number;
     if (!num) return res.status(400).send({ error: "Number required" });
     
-    if (!sock) {
-        return res.status(503).send({ error: "System warming up. Refresh in 10s." });
+    if (!sock || !sock.user) {
+        return res.status(503).send({ error: "Bot not ready. Wait 10 seconds and refresh." });
     }
 
     try {
-        await delay(3000);
-        let code = await sock.requestPairingCode(num.replace(/\D/g, ''));
+        // Clean number
+        const cleanNum = num.replace(/\D/g, '');
+        if (!cleanNum || cleanNum.length < 10) {
+            return res.status(400).send({ error: "Invalid number" });
+        }
+
+        console.log(`🔐 Requesting pairing code for: ${cleanNum}`);
+        let code = await sock.requestPairingCode(cleanNum);
+        console.log(`✅ Code generated: ${code}`);
         res.send({ code });
     } catch (e) {
-        res.status(500).send({ error: "WhatsApp Busy. Refresh." });
+        console.error('❌ Pairing error:', e.message);
+        res.status(500).send({ error: e.message || "WhatsApp busy. Try again." });
     }
 });
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
+app.get('/', (req, res) => {
+    res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>WRONG TURN 6</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body { font-family: Arial; padding: 20px; background: #111; color: #fff; }
+            .container { max-width: 500px; margin: auto; }
+            input, button { width: 100%; padding: 10px; margin: 10px 0; }
+            .code { background: #222; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>WRONG TURN 6 🤖</h2>
+            <input id="number" placeholder="255XXXXXXXXX" value="255">
+            <button onclick="getCode()">GET PAIRING CODE</button>
+            <div id="result"></div>
+        </div>
+        <script>
+            async function getCode() {
+                const num = document.getElementById('number').value;
+                const result = document.getElementById('result');
+                result.innerHTML = 'Loading...';
+                
+                try {
+                    const res = await fetch('/code?number=' + num);
+                    const data = await res.json();
+                    if (data.code) {
+                        result.innerHTML = '<div class="code"><b>✅ CODE:</b> ' + data.code + '</div>';
+                    } else {
+                        result.innerHTML = '<div style="color:red">❌ ' + data.error + '</div>';
+                    }
+                } catch (e) {
+                    result.innerHTML = '<div style="color:red">❌ Network error</div>';
+                }
+            }
+        </script>
+    </body>
+    </html>
+    `);
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Port: ${PORT}`);
+    console.log(`🌐 Server running on port: ${PORT}`);
     startBot();
 });
