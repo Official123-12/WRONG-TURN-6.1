@@ -7,12 +7,13 @@ const {
     BufferJSON 
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, initializeFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, limit, query } = require('firebase/firestore');
+const { getFirestore, initializeFirestore, doc, getDoc, setDoc, deleteDoc } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
 
+// FIREBASE CONFIG
 const firebaseConfig = {
     apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
     authDomain: "stanybots.firebaseapp.com",
@@ -30,27 +31,29 @@ const commands = new Map();
 const sockCache = new Map();
 
 /**
- * DYNAMIC COMMAND LOADER (STRICT PATHS)
+ * FIXED COMMAND LOADER (SCANS SUBFOLDERS)
  */
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
     
-    fs.readdirSync(cmdPath).forEach(folder => {
-        const folderPath = path.join(cmdPath, folder);
-        if (fs.lstatSync(folderPath).isDirectory()) {
-            fs.readdirSync(folderPath).forEach(file => {
-                if (file.endsWith('.js')) {
-                    try {
-                        const cmd = require(path.join(folderPath, file));
-                        cmd.category = folder;
-                        commands.set(cmd.name.toLowerCase(), cmd);
-                    } catch (e) { console.error(`Error loading ${file}:`, e); }
-                }
-            });
+    // Inasoma kila folder ndani ya /commands
+    const categories = fs.readdirSync(cmdPath);
+    for (const category of categories) {
+        const categoryPath = path.join(cmdPath, category);
+        if (fs.lstatSync(categoryPath).isDirectory()) {
+            // Inasoma kila file ndani ya subfolder
+            const files = fs.readdirSync(categoryPath).filter(file => file.endsWith('.js'));
+            for (const file of files) {
+                try {
+                    const cmd = require(path.join(categoryPath, file));
+                    cmd.category = category;
+                    commands.set(cmd.name.toLowerCase(), cmd);
+                } catch (e) { console.error(`Error loading ${file}:`, e); }
+            }
         }
-    });
-    console.log(`📡 WRONG TURN 6: ${commands.size} Commands Operational.`);
+    }
+    console.log(`✅ LOADED: ${commands.size} COMMANDS FROM SUBFOLDERS`);
 };
 
 async function useFirebaseAuthState(db, collectionName) {
@@ -65,9 +68,7 @@ async function useFirebaseAuthState(db, collectionName) {
     const removeData = async (id) => deleteDoc(doc(db, collectionName, fixId(id)));
     const creds = await readData('creds') || require('@whiskeysockets/baileys').initAuthCreds();
     return {
-        state: {
-            creds,
-            keys: {
+        state: { creds, keys: {
                 get: async (type, ids) => {
                     const data = {};
                     await Promise.all(ids.map(async id => {
@@ -110,27 +111,13 @@ async function startBot() {
     sockCache.set("sock", sock);
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update;
-        if (connection === 'open') {
-            console.log("WRONG TURN 6: ARMED");
-            
-            // PREMIMUM WELCOME MESSAGE ON CONNECTION
-            const welcomeText = `┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n` +
-                                `┃ 🥀 *Status:* Connected Successfully\n` +
-                                `┃ 🥀 *Developer:* STANYTZ\n` +
-                                `┃ 🥀 *Engine:* AngularSockets\n` +
-                                `┃ 🥀 *Security:* Active\n` +
-                                `┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n` +
-                                `_System is now monitoring your WhatsApp._\n` +
-                                `_Type *.menu* to begin._`;
-            
-            await sock.sendMessage(sock.user.id, { text: welcomeText });
+    sock.ev.on('connection.update', async (u) => {
+        if (u.connection === 'open') {
+            console.log("WRONG TURN 6: ONLINE");
+            // Welcome Message
+            await sock.sendMessage(sock.user.id, { text: "┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n┃ 🥀 Status: Online\n┃ 🥀 Dev: STANYTZ\n┗━━━━━━━━━━━━━━━━━━━━━━━┛" });
         }
-        if (connection === 'close') {
-            const reason = lastDisconnect?.error?.output?.statusCode;
-            if (reason !== DisconnectReason.loggedOut) startBot();
-        }
+        if (u.connection === 'close') startBot();
     });
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
@@ -143,51 +130,38 @@ async function startBot() {
 
         // AUTO PRESENCE
         await sock.sendPresenceUpdate('composing', from);
-        if (Math.random() > 0.7) await sock.sendPresenceUpdate('recording', from);
+        await sock.sendPresenceUpdate('recording', from);
 
-        // ANTI-LINK (STRICT)
+        // ANTI-LINK (ALL LINKS)
         if (/(https?:\/\/[^\s]+)/g.test(body) && from.endsWith('@g.us')) {
-            const groupMetadata = await sock.groupMetadata(from);
-            const isBotAdmin = groupMetadata.participants.find(p => p.id === sock.user.id.split(':')[0] + '@s.whatsapp.net')?.admin;
-            const isSenderAdmin = groupMetadata.participants.find(p => p.id === sender)?.admin;
-            if (isBotAdmin && !isSenderAdmin) {
-                await sock.sendMessage(from, { delete: m.key });
-                return;
-            }
+            const metadata = await sock.groupMetadata(from);
+            const isBotAdmin = metadata.participants.find(p => p.id === sock.user.id.split(':')[0] + '@s.whatsapp.net')?.admin;
+            const isSenderAdmin = metadata.participants.find(p => p.id === sender)?.admin;
+            if (isBotAdmin && !isSenderAdmin) return await sock.sendMessage(from, { delete: m.key });
         }
 
-        // MOOD GUESSER FOR STATUS
+        // MOOD STATUS REPLY
         if (from === 'status@broadcast') {
             await sock.readMessages([m.key]);
-            const statusContent = m.message.extendedTextMessage?.text || "";
-            if (statusContent.length > 5) {
-                const moodRes = /(sad|😭|💔|cry)/.test(statusContent.toLowerCase()) ? "WT6 detected sadness. Stay strong. 🥀" : 
-                                /(happy|🔥|🚀|win)/.test(statusContent.toLowerCase()) ? "Success detected. Keep winning. 🥂" : "Observed by Wrong Turn 6. 🥀";
-                await sock.sendMessage(from, { text: moodRes }, { quoted: m });
+            const txt = m.message.extendedTextMessage?.text || "";
+            if (txt.length > 5) {
+                const res = /(sad|😭|💔)/.test(txt.toLowerCase()) ? "Stay strong. 🥀" : /(happy|🔥|🚀)/.test(txt.toLowerCase()) ? "Keep winning. 🥂" : "Viewed by WT6. 🥀";
+                await sock.sendMessage(from, { text: res }, { quoted: m });
             }
             return;
         }
 
-        // COMMAND HANDLING
+        // COMMAND EXECUTION
         if (body.startsWith('.')) {
             const args = body.slice(1).trim().split(/ +/);
             const cmdName = args.shift().toLowerCase();
             const cmd = commands.get(cmdName);
-            
-            if (cmd) {
-                try {
-                    await cmd.execute(m, sock, Array.from(commands.values()), args);
-                } catch (e) { console.error(e); }
-            }
+            if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), args);
         }
     });
 
-    sock.ev.on('call', async (c) => {
-        await sock.rejectCall(c[0].id, c[0].from);
-        await sock.sendMessage(c[0].from, { text: "📵 *WRONG TURN 6:* Incoming calls are auto-blocked." });
-    });
-
-    setInterval(async () => { if (sock.user) await sock.sendPresenceUpdate('available'); }, 15000);
+    sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
+    setInterval(() => { if (sock.user) sock.sendPresenceUpdate('available'); }, 15000);
 }
 
 app.get('/code', async (req, res) => {
@@ -200,9 +174,4 @@ app.get('/code', async (req, res) => {
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`System Online: ${PORT}`);
-    startBot();
-});
+app.listen(process.env.PORT || 3000, startBot);
