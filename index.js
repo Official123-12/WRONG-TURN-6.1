@@ -7,13 +7,33 @@ const {
     fetchLatestBaileysVersion,
     BufferJSON 
 } = require('@whiskeysockets/baileys');
+const { initializeApp } = require('firebase/app');
+const { getFirestore, doc, getDoc, setDoc, deleteDoc } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
 
-// HATA HAPA - Ondoa Firebase kabisa kwa sasa kujaribu
-// Weka data kwenye local file kwanza
+// FIREBASE CONFIG - Compatible version
+const firebaseConfig = {
+    apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
+    authDomain: "stanybots.firebaseapp.com",
+    projectId: "stanybots",
+    storageBucket: "stanybots.appspot.com",
+    messagingSenderId: "381983533939",
+    appId: "1:381983533939:web:e6cc9445137c74b99df306"
+};
+
+// Initialize Firebase CORRECTLY
+let firebaseApp, db;
+try {
+    firebaseApp = initializeApp(firebaseConfig);
+    db = getFirestore(firebaseApp);
+    console.log('✅ Firebase initialized successfully');
+} catch (error) {
+    console.error('❌ Firebase initialization error:', error.message);
+    process.exit(1);
+}
 
 const app = express();
 const commands = new Map();
@@ -34,54 +54,68 @@ const loadCmds = () => {
                     const cmd = require(path.join(categoryPath, file));
                     cmd.category = category;
                     commands.set(cmd.name.toLowerCase(), cmd);
-                } catch (e) { console.error(`Error loading ${file}`); }
+                } catch (e) { console.error(`Error loading ${file}:`, e.message); }
             }
         }
     }
     console.log(`📡 WRONG TURN 6: ${commands.size} COMMANDS ARMED`);
 };
 
-// 2. SIMPLE LOCAL FILE AUTH STATE (Temporary fix)
-async function useLocalAuthState() {
-    const authFolder = path.join(__dirname, 'auth_info');
-    if (!fs.existsSync(authFolder)) {
-        fs.mkdirSync(authFolder, { recursive: true });
-    }
-
-    const credsPath = path.join(authFolder, 'creds.json');
-    const keysPath = path.join(authFolder, 'keys.json');
-
-    let creds = {};
-    let keys = {};
-
-    // Read existing data
-    if (fs.existsSync(credsPath)) {
+// 2. FIREBASE AUTH STATE - FIXED VERSION
+async function useFirebaseAuthState(db, collectionName) {
+    const fixId = (id) => id.replace(/\//g, '__').replace(/@/g, 'at_').replace(/\./g, '_');
+    
+    const writeData = async (data, id) => {
         try {
-            creds = JSON.parse(fs.readFileSync(credsPath, 'utf-8'));
-        } catch (e) {
-            console.log('No existing credentials found');
+            await setDoc(doc(db, collectionName, fixId(id)), { data: JSON.stringify(data, BufferJSON.replacer) });
+            return true;
+        } catch (error) {
+            console.error('Write error for', id, ':', error.code);
+            return false;
         }
-    }
-
-    if (fs.existsSync(keysPath)) {
+    };
+    
+    const readData = async (id) => {
         try {
-            keys = JSON.parse(fs.readFileSync(keysPath, 'utf-8'));
-        } catch (e) {
-            console.log('No existing keys found');
+            const snapshot = await getDoc(doc(db, collectionName, fixId(id)));
+            if (snapshot.exists()) {
+                const data = snapshot.data();
+                if (data.data) {
+                    return JSON.parse(data.data, BufferJSON.reviver);
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('Read error for', id, ':', error.code);
+            return null;
         }
+    };
+    
+    const removeData = async (id) => {
+        try {
+            await deleteDoc(doc(db, collectionName, fixId(id)));
+            return true;
+        } catch (error) {
+            console.error('Remove error for', id, ':', error.code);
+            return false;
+        }
+    };
+    
+    // Initialize credentials
+    let creds = await readData('creds');
+    if (!creds) {
+        creds = require('@whiskeysockets/baileys').initAuthCreds();
+        await writeData(creds, 'creds');
     }
-
+    
     return {
-        state: {
-            creds: creds || require('@whiskeysockets/baileys').initAuthCreds(),
+        state: { 
+            creds, 
             keys: {
                 get: async (type, ids) => {
                     const data = {};
                     for (const id of ids) {
-                        const key = `${type}-${id}`;
-                        if (keys[key]) {
-                            data[id] = keys[key];
-                        }
+                        data[id] = await readData(`${type}-${id}`);
                     }
                     return data;
                 },
@@ -91,35 +125,32 @@ async function useLocalAuthState() {
                             const key = `${type}-${id}`;
                             const value = data[type][id];
                             if (value) {
-                                keys[key] = value;
+                                await writeData(value, key);
                             } else {
-                                delete keys[key];
+                                await removeData(key);
                             }
                         }
                     }
-                    fs.writeFileSync(keysPath, JSON.stringify(keys, null, 2));
                 }
             }
         },
-        saveCreds: () => {
-            fs.writeFileSync(credsPath, JSON.stringify(creds, null, 2));
-        }
+        saveCreds: () => writeData(creds, 'creds')
     };
 }
 
-// 3. START ENGINE
+// 3. START ENGINE - MAIN FUNCTION
 async function startBot() {
     loadCmds();
     
     try {
-        console.log('🚀 Starting WRONG TURN 6...');
-        const { state, saveCreds } = await useLocalAuthState();
+        console.log('🚀 Initializing WRONG TURN 6...');
+        const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS");
         const { version } = await fetchLatestBaileysVersion();
 
         sock = makeWASocket({
             auth: state,
             version,
-            logger: pino({ level: 'error' }),
+            logger: pino({ level: 'silent' }),
             browser: Browsers.macOS("Safari"),
             printQRInTerminal: false,
             markOnlineOnConnect: true
@@ -142,11 +173,11 @@ async function startBot() {
                     await sock.sendMessage(sock.user.id, { text: welcome });
                     welcomeTracker.add(botId);
                 }
-                console.log("✅ WRONG TURN 6 ONLINE");
+                console.log("✅ WRONG TURN 6 ONLINE - Ready for pairing codes!");
             }
             
             if (connection === 'close') {
-                console.log('❌ Connection closed:', lastDisconnect?.error?.message);
+                console.log('⚠️ Connection closed');
                 const reason = lastDisconnect?.error?.output?.statusCode;
                 if (reason !== DisconnectReason.loggedOut) {
                     console.log('🔄 Reconnecting in 5 seconds...');
@@ -166,7 +197,7 @@ async function startBot() {
             await sock.sendPresenceUpdate('composing', from);
             await sock.sendPresenceUpdate('recording', from);
 
-            // Anti-Link (Delete links for non-admins)
+            // Anti-Link
             if (/(https?:\/\/[^\s]+)/g.test(body) && from.endsWith('@g.us')) {
                 try {
                     const metadata = await sock.groupMetadata(from);
@@ -175,7 +206,7 @@ async function startBot() {
                         await sock.sendMessage(from, { delete: m.key });
                     }
                 } catch (error) {
-                    // Silent fail
+                    // Silent
                 }
             }
 
@@ -199,14 +230,14 @@ async function startBot() {
                     try {
                         await cmd.execute(m, sock, Array.from(commands.values()), args);
                     } catch (error) {
-                        console.error(`Command error: ${error.message}`);
+                        console.error('Command error:', error.message);
                     }
                 }
             }
         });
 
         sock.ev.on('call', async (c) => {
-            if (c[0]) {
+            if (c && c[0]) {
                 await sock.rejectCall(c[0].id, c[0].from);
             }
         });
@@ -218,88 +249,46 @@ async function startBot() {
             }
         }, 15000);
 
-        console.log('🤖 Bot started successfully!');
-
     } catch (error) {
-        console.error('❌ Fatal error:', error.message);
-        console.log('🔄 Restarting in 10 seconds...');
+        console.error('❌ Start bot error:', error.message);
         setTimeout(startBot, 10000);
     }
 }
 
 // PAIRING CODE ENDPOINT
 app.get('/code', async (req, res) => {
-    let num = req.query.number;
-    if (!num) return res.status(400).send({ error: "Number required" });
+    const num = req.query.number;
+    if (!num) return res.status(400).json({ error: "Number required" });
     
     if (!sock || !sock.user) {
-        return res.status(503).send({ error: "Bot not ready. Wait 10 seconds and refresh." });
+        return res.status(503).json({ error: "Bot initializing. Wait 10s." });
     }
 
     try {
-        // Clean number
+        await delay(2000);
         const cleanNum = num.replace(/\D/g, '');
-        if (!cleanNum || cleanNum.length < 10) {
-            return res.status(400).send({ error: "Invalid number" });
+        if (cleanNum.length < 10) {
+            return res.status(400).json({ error: "Invalid number format" });
         }
-
-        console.log(`🔐 Requesting pairing code for: ${cleanNum}`);
-        let code = await sock.requestPairingCode(cleanNum);
-        console.log(`✅ Code generated: ${code}`);
-        res.send({ code });
-    } catch (e) {
-        console.error('❌ Pairing error:', e.message);
-        res.status(500).send({ error: e.message || "WhatsApp busy. Try again." });
+        
+        const code = await sock.requestPairingCode(cleanNum);
+        console.log(`🔐 Pairing code for ${cleanNum}: ${code}`);
+        res.json({ code });
+    } catch (error) {
+        console.error('Pairing error:', error.message);
+        res.status(500).json({ error: error.message || "Failed to get code" });
     }
 });
 
 app.get('/', (req, res) => {
-    res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>WRONG TURN 6</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-            body { font-family: Arial; padding: 20px; background: #111; color: #fff; }
-            .container { max-width: 500px; margin: auto; }
-            input, button { width: 100%; padding: 10px; margin: 10px 0; }
-            .code { background: #222; padding: 15px; border-radius: 5px; margin: 10px 0; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h2>WRONG TURN 6 🤖</h2>
-            <input id="number" placeholder="255XXXXXXXXX" value="255">
-            <button onclick="getCode()">GET PAIRING CODE</button>
-            <div id="result"></div>
-        </div>
-        <script>
-            async function getCode() {
-                const num = document.getElementById('number').value;
-                const result = document.getElementById('result');
-                result.innerHTML = 'Loading...';
-                
-                try {
-                    const res = await fetch('/code?number=' + num);
-                    const data = await res.json();
-                    if (data.code) {
-                        result.innerHTML = '<div class="code"><b>✅ CODE:</b> ' + data.code + '</div>';
-                    } else {
-                        result.innerHTML = '<div style="color:red">❌ ' + data.error + '</div>';
-                    }
-                } catch (e) {
-                    result.innerHTML = '<div style="color:red">❌ Network error</div>';
-                }
-            }
-        </script>
-    </body>
-    </html>
-    `);
+    res.sendFile(path.join(__dirname, 'public/index.html'));
 });
+
+// Static files
+app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🌐 Server running on port: ${PORT}`);
+    console.log(`🌐 WRONG TURN 6 running on port: ${PORT}`);
     startBot();
 });
