@@ -10,7 +10,7 @@ const {
     BufferJSON
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, initializeFirestore, doc, getDoc, setDoc, collection } = require('firebase/firestore');
+const { getFirestore, initializeFirestore, doc, getDoc, setDoc, deleteDoc } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
@@ -30,13 +30,13 @@ const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true
 
 const app = express();
 const commands = new Map();
+let sock = null;
 
-// 1. COMMAND LOADER
+// 1. DYNAMIC COMMAND LOADER
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
-    const folders = fs.readdirSync(cmdPath);
-    folders.forEach(folder => {
+    fs.readdirSync(cmdPath).forEach(folder => {
         const folderPath = path.join(cmdPath, folder);
         if (fs.lstatSync(folderPath).isDirectory()) {
             fs.readdirSync(folderPath).filter(f => f.endsWith('.js')).forEach(file => {
@@ -52,7 +52,7 @@ const loadCmds = () => {
     });
 };
 
-// 2. FIREBASE AUTH HANDLER
+// 2. FIREBASE AUTH HANDLER (Optimized for Linking)
 async function useFirebaseAuthState(db, collectionName, sessionId) {
     const fixId = (id) => `${sessionId}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`;
     const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
@@ -62,6 +62,7 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
             return snapshot.exists() ? JSON.parse(JSON.stringify(snapshot.data()), BufferJSON.reviver) : null;
         } catch (e) { return null; }
     };
+    const removeData = async (id) => deleteDoc(doc(db, collectionName, fixId(id)));
 
     let creds = await readData('creds') || initAuthCreds();
 
@@ -82,25 +83,27 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
                     for (const type in data) {
                         for (const id in data[type]) {
                             const value = data[type][id];
-                            if (value) await writeData(value, `${type}-${id}`);
+                            value ? await writeData(value, `${type}-${id}`) : await removeData(`${type}-${id}`);
                         }
                     }
                 }
             }
         },
-        saveCreds: () => writeData(creds, 'creds')
+        saveCreds: () => writeData(creds, 'creds'),
+        wipeCreds: () => removeData('creds') // Crucial for new pairing
     };
 }
 
-// 3. MAIN BOT PROCESS
-async function startBot(sessionId = "MASTER_SESSION") {
+// 3. MAIN BOT ENGINE
+async function startBot() {
     loadCmds();
-    const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", sessionId);
+    const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", "WT6_MASTER");
     
-    const sock = makeWASocket({
+    sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS("Safari"),
+        browser: Browsers.ubuntu('Chrome'), // Faster Link speed
+        printQRInTerminal: false,
         markOnlineOnConnect: true
     });
 
@@ -109,11 +112,13 @@ async function startBot(sessionId = "MASTER_SESSION") {
     sock.ev.on('connection.update', async (u) => {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
-            console.log(`✅ WT6 ONLINE: ${sessionId}`);
-            await sock.sendMessage(sock.user.id, { text: "*W R O N G  T U R N  6* ✔️\n_System Armed & Operational._" });
+            console.log("✅ WRONG TURN 6: CONNECTED");
+            const welcome = `┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n┃\n┃ 🥀 *SYSTEM ARMED & ACTIVE*\n┃\n┣━━━━━━━━━━━━━━━━━━━━━━━┓\n┃ 🛡️ *DEV    :* STANYTZ\n┃ ⚙️ *VERSION:* 6.6.0\n┃ 🌐 *ENGINE :* AngularSockets\n┃ 🌷 *PREFIX :* [ . ]\n┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n🥀🥂 *STANYTZ INDUSTRIES*`;
+            await sock.sendMessage(sock.user.id, { text: welcome });
         }
         if (connection === 'close') {
-            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) startBot(sessionId);
+            const reason = lastDisconnect?.error?.output?.statusCode;
+            if (reason !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
         }
     });
 
@@ -122,6 +127,10 @@ async function startBot(sessionId = "MASTER_SESSION") {
         if (!m.message || m.key.fromMe) return;
         const from = m.key.remoteJid;
         const body = (m.message.conversation || m.message.extendedTextMessage?.text || "").trim();
+
+        // Auto Presence
+        await sock.sendPresenceUpdate('composing', from);
+        if (Math.random() > 0.5) await sock.sendPresenceUpdate('recording', from);
 
         if (body.startsWith('.')) {
             const args = body.slice(1).trim().split(/ +/);
@@ -134,36 +143,49 @@ async function startBot(sessionId = "MASTER_SESSION") {
     setInterval(() => { if (sock?.user) sock.sendPresenceUpdate('available'); }, 15000);
 }
 
-// 4. THE ULTIMATE PAIRING FIX (DYNAMIC SESSION ID)
+// 4. THE ULTIMATE STABLE PAIRING ROUTE
 app.get('/code', async (req, res) => {
     let num = req.query.number;
-    if (!num) return res.status(400).send({ error: "Number missing" });
-
-    // Generate a random ID to ensure NO PRECONDITION error
-    const randomId = "WT6_" + Math.random().toString(36).substring(7);
+    if (!num) return res.status(400).send({ error: "No number" });
 
     try {
-        const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", randomId);
+        // Step 1: Wipe old session to prevent "Precondition Required"
+        const auth = await useFirebaseAuthState(db, "WT6_SESSIONS", "WT6_MASTER");
+        await auth.wipeCreds();
+
+        // Step 2: Create a NEW socket specifically for this pairing request
         const pSock = makeWASocket({
-            auth: state,
+            auth: {
+                creds: initAuthCreds(),
+                keys: makeCacheableSignalKeyStore({}, pino({level:'silent'}))
+            },
             logger: pino({ level: 'silent' }),
-            browser: Browsers.macOS("Safari")
+            browser: Browsers.ubuntu('Chrome')
         });
 
-        await delay(3000);
+        await delay(3000); // Handshake stabilization
         let code = await pSock.requestPairingCode(num.replace(/\D/g, ''));
         res.send({ code });
 
-        pSock.ev.on('creds.update', saveCreds);
+        // Step 3: Listen for the link success and save to Firebase
+        pSock.ev.on('creds.update', async (newCreds) => {
+            await setDoc(doc(db, "WT6_SESSIONS", "WT6_MASTER_creds"), JSON.parse(JSON.stringify(newCreds, BufferJSON.replacer)));
+        });
+
         pSock.ev.on('connection.update', (u) => {
-            if (u.connection === 'open') console.log("New Device Linked Successfully.");
+            if (u.connection === 'open') {
+                console.log("Device Linked Successfully.");
+                pSock.ev.removeAllListeners();
+                startBot(); // Reboot the bot into the main loop
+            }
         });
 
     } catch (e) {
-        res.status(500).send({ error: "WhatsApp Busy." });
+        console.error(e);
+        res.status(500).send({ error: "System busy. Refresh." });
     }
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => { console.log(`Server: ${PORT}`); startBot(); });
+app.listen(PORT, () => { console.log(`Server Online: ${PORT}`); startBot(); });
