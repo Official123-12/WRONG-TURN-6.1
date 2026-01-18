@@ -1,58 +1,63 @@
+/**
+ * 🥀 WRONG TURN 6 - ARMED MENU
+ * 🥀 THEME: OBSIDIAN RED / ELITE BLACK
+ * 🥀 STYLE: BOX BORDER FRAME | VERTICAL
+ */
+
 module.exports = {
     name: 'menu',
     async execute(m, sock, commands, args) {
         const from = m.key.remoteJid;
-        
-        // 1. Send Verified VCard first
-        const vcard = 'BEGIN:VCARD\n' +
-                      'VERSION:3.0\n' +
-                      'FN:WRONG TURN 6 ✔️\n' + // Blue Tick
-                      'ORG:STANYTZ;\n' +
-                      'TEL;type=CELL;type=VOICE;waid=255518558502:255618558502\n' + // Weka namba yako hapa
-                      'END:VCARD';
 
-        await sock.sendMessage(from, { 
-            contacts: { 
-                displayName: 'STANYTZ', 
-                contacts: [{ vcard }] 
-            } 
+        // 1. GROUP COMMANDS BY CATEGORY
+        const categories = {};
+        commands.forEach(cmd => {
+            const cat = cmd.category ? cmd.category.toUpperCase() : 'GENERAL';
+            if (!categories[cat]) categories[cat] = [];
+            categories[cat].push(cmd.name);
         });
 
-        // 2. Build the Menu Header
-        let menu = `┏━━━━ 『 *WRONG TURN 6* 』 ━━━━┓\n`;
-        menu += `┃ 🥀 *Developer:* STANYTZ\n`;
-        menu += `┃ 🌷 *Theme:* Obsidian Red\n`;
-        menu += `┃ 🥀 *Commands:* ${commands.length}\n`;
-        menu += `┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+        // 2. BUILD THE ELITE BOX MENU
+        let menuBody = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+        menuBody += `┃  *W R O N G  T U R N  6*  ✔️\n`;
+        menuBody += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
 
-        // 3. Group Commands by Category (Folders)
-        const cats = {};
-        commands.forEach(c => {
-            if (!cats[c.category]) cats[c.category] = [];
-            cats[c.category].push(c.name);
-        });
+        menuBody += `┌───  🥀  *S Y S T E M  I N F O*\n`;
+        menuBody += `│\n`;
+        menuBody += `│  🥀 *User:* @${m.sender.split('@')[0]}\n`;
+        menuBody += `│  🥀 *Developer:* STANYTZ\n`;
+        menuBody += `│  🥀 *Lib:* AngularSockets\n`;
+        menuBody += `│  🥀 *Status:* Operational\n`;
+        menuBody += `│\n`;
+        menuBody += `└────────────────────────┘\n\n`;
 
-        // 4. Build Vertical Menu Body
-        for (const [category, cmds] of Object.entries(cats)) {
-            menu += `┏━━━〔 *${category.toUpperCase()}* 〕━━━┓\n`;
-            cmds.forEach(name => {
-                menu += `┃ 🥀 .${name}\n`;
+        // 3. CATEGORIES LOOP (STRICTLY VERTICAL)
+        for (const [category, cmds] of Object.entries(categories)) {
+            menuBody += `┏━━━━━━ 〔 *${category}* 〕 ━━━━━━┓\n`;
+            cmds.sort().forEach(name => {
+                menuBody += `┃  🥀  .${name}\n`; // Kila command kwenye mstari wake
             });
-            menu += `┗━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+            menuBody += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
         }
 
-        // 5. Send Menu with Ad Reply (Thumbnail)
-        await sock.sendMessage(from, { 
-            text: menu,
-            contextInfo: { 
-                externalAdReply: { 
-                    title: "WRONG TURN 6 ACTIVE", 
-                    body: "STANYTZ MASTER ENGINE", 
-                    mediaType: 1, 
-                    thumbnailUrl: "https://files.catbox.moe/59ays3.jpg", // Logo yako
-                    sourceUrl: "https://github.com/stanytz",
-                    renderLargerThumbnail: true
-                } 
+        menuBody += `_© 2026 STANYTZ INDUSTRIES_  🥀🥂`;
+
+        // 4. SEND WITH LARGE LOGO & VERIFICATION TAG
+        await sock.sendMessage(from, {
+            text: menuBody,
+            mentions: [m.sender],
+            contextInfo: {
+                externalAdReply: {
+                    title: "WRONG TURN 6 ✔️", // Fake Blue Tick
+                    body: "SYSTEM VERIFIED BY STANYTZ",
+                    mediaType: 1,
+                    previewType: 0,
+                    renderLargerThumbnail: true,
+                    thumbnailUrl: "https://files.catbox.moe/59ays3.jpg",
+                    sourceUrl: "https://whatsapp.com/channel/0029Vb7fzu4EwEjmsD4Tzs1p"
+                },
+                forwardingScore: 999,
+                isForwarded: true
             }
         }, { quoted: m });
     }
