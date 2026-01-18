@@ -4,18 +4,16 @@ const {
     DisconnectReason, 
     Browsers, 
     delay, 
-    fetchLatestBaileysVersion,
-    getAggregateVotesInPollMessage,
-    makeCacheableSignalKeyStore
+    fetchLatestBaileysVersion 
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, initializeFirestore, doc, setDoc, getDoc, deleteDoc } = require('firebase/firestore');
+const { getFirestore, initializeFirestore, doc, getDoc } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
-const crypto = require('crypto');
 
+// Firebase configuration
 const firebaseConfig = {
     apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
     authDomain: "stanybots.firebaseapp.com",
@@ -25,6 +23,7 @@ const firebaseConfig = {
     appId: "1:381983533939:web:e6cc9445137c74b99df306"
 };
 
+// Initialize Firebase and Express
 const firebaseApp = initializeApp(firebaseConfig);
 const db = initializeFirestore(firebaseApp, { 
     experimentalForceLongPolling: true, 
@@ -34,293 +33,257 @@ const db = initializeFirestore(firebaseApp, {
 const app = express();
 const commands = new Map();
 let sock = null;
-let isConnected = false;
-let pairingCode = null;
-let pairingNumber = null;
 
-// Simple in-memory auth state (no Firebase dependency for auth)
-const useMemoryAuth = () => {
-    const state = {
-        creds: {},
-        keys: {}
-    };
+// Improved command loader with error handling
+const loadCmds = () => {
+    commands.clear(); // Clear existing commands
     
-    return {
-        state,
-        saveCreds: () => {
-            // Save to local file as backup
-            fs.writeFileSync('./session.json', JSON.stringify(state, null, 2));
-            console.log('💾 Saved session locally');
+    const cmdPath = path.resolve(__dirname, 'commands');
+    if (!fs.existsSync(cmdPath)) {
+        console.log('📁 Creating commands directory...');
+        fs.mkdirSync(cmdPath, { recursive: true });
+        return;
+    }
+    
+    let loadedCount = 0;
+    let errorCount = 0;
+    
+    // Read each category folder
+    const categories = fs.readdirSync(cmdPath);
+    
+    if (categories.length === 0) {
+        console.log('⚠️  No command categories found in commands/ directory');
+        return;
+    }
+    
+    categories.forEach(folder => {
+        const categoryPath = path.join(cmdPath, folder);
+        
+        if (fs.lstatSync(categoryPath).isDirectory()) {
+            const files = fs.readdirSync(categoryPath).filter(f => f.endsWith('.js'));
+            
+            if (files.length === 0) {
+                console.log(`⚠️  No .js files in category: ${folder}`);
+                return;
+            }
+            
+            files.forEach(file => {
+                try {
+                    const filePath = path.join(categoryPath, file);
+                    delete require.cache[require.resolve(filePath)]; // Clear cache for hot reload
+                    const cmd = require(filePath);
+                    
+                    // Validate command structure
+                    if (!cmd || typeof cmd !== 'object') {
+                        console.error(`❌ ${file}: Invalid export (not an object)`);
+                        errorCount++;
+                        return;
+                    }
+                    
+                    if (!cmd.name) {
+                        console.error(`❌ ${file}: Missing 'name' property`);
+                        errorCount++;
+                        return;
+                    }
+                    
+                    if (typeof cmd.name !== 'string') {
+                        console.error(`❌ ${file}: 'name' must be a string`);
+                        errorCount++;
+                        return;
+                    }
+                    
+                    if (typeof cmd.execute !== 'function') {
+                        console.error(`❌ ${file}: Missing 'execute' function`);
+                        errorCount++;
+                        return;
+                    }
+                    
+                    // Set command properties
+                    cmd.category = folder;
+                    cmd.file = file;
+                    
+                    const cmdName = cmd.name.toLowerCase().trim();
+                    commands.set(cmdName, cmd);
+                    
+                    // Handle aliases if present
+                    if (Array.isArray(cmd.aliases)) {
+                        cmd.aliases.forEach(alias => {
+                            if (typeof alias === 'string') {
+                                commands.set(alias.toLowerCase().trim(), cmd);
+                            }
+                        });
+                    }
+                    
+                    console.log(`✅ Loaded: ${cmdName} (${folder}/${file})`);
+                    loadedCount++;
+                    
+                } catch (error) {
+                    console.error(`❌ Failed to load ${folder}/${file}:`, error.message);
+                    errorCount++;
+                }
+            });
         }
-    };
+    });
+    
+    console.log(`\n📊 Commands Summary:`);
+    console.log(`   ✅ Loaded: ${loadedCount}`);
+    console.log(`   ❌ Errors: ${errorCount}`);
+    console.log(`   📁 Total commands in memory: ${commands.size}\n`);
 };
 
-const loadCmds = () => {
-    try {
-        const cmdPath = path.resolve(__dirname, 'commands');
-        if (!fs.existsSync(cmdPath)) {
-            console.log('⚠️ Creating commands directory...');
-            fs.mkdirSync(cmdPath, { recursive: true });
-            
-            // Create essential commands
-            const cmds = {
-                'ping.js': `module.exports = {
-    name: 'ping',
-    description: 'Check bot status',
-    category: 'utility',
-    execute: async (m, sock) => {
-        const uptime = process.uptime();
-        const hours = Math.floor(uptime / 3600);
-        const minutes = Math.floor((uptime % 3600) / 60);
-        const seconds = Math.floor(uptime % 60);
-        await sock.sendMessage(m.key.remoteJid, { 
-            text: '🏓 *PONG!*\\n\\n' +
-                  '🤖 *WRONG TURN 6*\\n' +
-                  '✅ *Status:* ONLINE\\n' +
-                  '⏱️ *Uptime:* ' + hours + 'h ' + minutes + 'm ' + seconds + 's\\n' +
-                  '📊 *Commands:* ' + commands.size + ' loaded\\n' +
-                  '🔧 *Engine:* Pairing-Code Only\\n' +
-                  '\\n🥀 *STANYTZ*'
-        });
-    }
-};`,
-                
-                'menu.js': `module.exports = {
-    name: 'menu',
-    description: 'Show all commands',
-    category: 'utility',
-    execute: async (m, sock, commands) => {
+// Bot initialization function
+async function startBot() {
+    console.log('🤖 Starting WRONG TURN 6 bot...\n');
+    
+    // Load commands first
+    loadCmds();
+    
+    // Display loaded commands
+    if (commands.size > 0) {
+        console.log('📋 Available Commands:');
         const categories = {};
         commands.forEach(cmd => {
             if (!categories[cmd.category]) categories[cmd.category] = [];
-            categories[cmd.category].push(\`• .\${cmd.name}\${cmd.description ? ' - ' + cmd.description : ''}\`);
+            categories[cmd.category].push(cmd.name);
         });
         
-        let menu = '📖 *WRONG TURN 6 COMMANDS*\\n\\n';
         Object.keys(categories).forEach(cat => {
-            menu += \`📁 *\${cat.toUpperCase()}*\\n\${categories[cat].join('\\n')}\\n\\n\`;
+            console.log(`   📁 ${cat.toUpperCase()}: ${categories[cat].join(', ')}`);
         });
-        menu += '\\n🔧 *Prefix:* .\\n👨‍💻 *Dev:* STANYTZ';
-        
-        await sock.sendMessage(m.key.remoteJid, { text: menu });
+        console.log('');
+    } else {
+        console.log('⚠️  No commands loaded. Bot will start but won\'t respond to commands.\n');
     }
-};`,
-                
-                'owner.js': `module.exports = {
-    name: 'owner',
-    description: 'Contact bot owner',
-    category: 'utility',
-    execute: async (m, sock) => {
-        const ownerInfo = '👑 *WRONG TURN 6 OWNER*\\n\\n' +
-                         '👤 *Name:* STANYTZ\\n' +
-                         '📱 *Contact:* wa.me/255000000000\\n' +
-                         '🌐 *GitHub:* github.com/stanytz\\n' +
-                         '\\n💬 *For bot issues or queries*';
-        await sock.sendMessage(m.key.remoteJid, { text: ownerInfo });
-    }
-};`
-            };
-            
-            Object.entries(cmds).forEach(([fileName, content]) => {
-                const utilPath = path.join(cmdPath, 'utility');
-                fs.mkdirSync(utilPath, { recursive: true });
-                fs.writeFileSync(path.join(utilPath, fileName), content);
-            });
-            
-            console.log('✅ Created essential commands');
-        }
-        
-        let loaded = 0;
-        fs.readdirSync(cmdPath).forEach(folder => {
-            const categoryPath = path.join(cmdPath, folder);
-            if (fs.lstatSync(categoryPath).isDirectory()) {
-                fs.readdirSync(categoryPath).filter(f => f.endsWith('.js')).forEach(file => {
-                    try {
-                        const filePath = path.join(categoryPath, file);
-                        delete require.cache[require.resolve(filePath)];
-                        
-                        const cmd = require(filePath);
-                        
-                        if (!cmd?.name || typeof cmd.execute !== 'function') {
-                            console.log(`⚠️ Skipping ${file}: Invalid command`);
-                            return;
-                        }
-                        
-                        const cmdName = cmd.name.trim().toLowerCase();
-                        commands.set(cmdName, cmd);
-                        cmd.category = folder;
-                        loaded++;
-                        
-                    } catch (e) {
-                        console.log(`❌ Error loading ${file}:`, e.message);
-                    }
-                });
-            }
-        });
-        
-        console.log(`✅ Loaded ${loaded} commands`);
-        
-    } catch (error) {
-        console.error('❌ Command loading error:', error);
-    }
-};
-
-async function connectToWhatsApp(authState = null) {
+    
     try {
-        console.log('🔗 Initializing WhatsApp connection...');
+        // Load Firebase auth state
+        const { useFirebaseAuthState } = require('./lib/firestoreAuth');
+        const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS");
         
-        let state;
-        if (authState && authState.creds && Object.keys(authState.creds).length > 0) {
-            console.log('📥 Using provided auth state');
-            state = authState;
-        } else {
-            console.log('🆕 Creating new auth state');
-            state = useMemoryAuth().state;
-        }
-        
+        // Get latest Baileys version
         const { version } = await fetchLatestBaileysVersion();
         
+        // Create WhatsApp socket
         sock = makeWASocket({
             auth: state,
             version,
             logger: pino({ level: 'silent' }),
             browser: Browsers.macOS("Safari"),
-            printQRInTerminal: false, // No QR codes
+            printQRInTerminal: false,
             markOnlineOnConnect: true,
             syncFullHistory: false,
-            emitOwnEvents: true,
-            generateHighQualityLinkPreview: true,
-            defaultQueryTimeoutMs: 60000,
+            connectTimeoutMs: 60000,
+            keepAliveIntervalMs: 30000
         });
         
         // Save credentials when updated
-        sock.ev.on('creds.update', () => {
-            if (sock?.authState?.creds) {
-                useMemoryAuth().saveCreds();
-            }
-        });
+        sock.ev.on('creds.update', saveCreds);
         
+        // Handle connection events
         sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect, qr } = update;
+            const { connection, lastDisconnect } = update;
             
             if (connection === 'open') {
-                console.log('✅ WRONG TURN 6 IS ONLINE');
-                isConnected = true;
+                console.log('✅ WRONG TURN 6 IS ONLINE AND READY\n');
                 
-                const botId = sock.user.id.split(':')[0];
-                console.log(`🤖 Bot ID: ${botId}`);
-                
+                // Send bot contact card
                 try {
-                    // Send system message to owner
-                    const welcome = `┏━━━━ 『 WRONG TURN 6 』 ━━━━┓
-┃
-┃ 🥀 *PAIRING SYSTEM ACTIVE*
-┃
-┣━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ 🛡️ *DEV    :* STANYTZ
-┃ ⚙️ *VERSION:* 6.6.0
-┃ 🌐 *AUTH   :* Pairing-Code Only
-┃ 🌷 *PREFIX :* [ . ]
-┗━━━━━━━━━━━━━━━━━━━━━━━┛
-
-✅ *SYSTEM ARMED AND READY*`;
+                    const botId = sock.user.id.split(':')[0];
+                    const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:WRONG TURN 6 ✔️\nORG:STANYTZ;\nTEL;type=CELL;type=VOICE;waid=${botId}:${botId}\nEND:VCARD`;
+                    await sock.sendMessage(sock.user.id, { 
+                        contacts: { 
+                            displayName: 'STANYTZ', 
+                            contacts: [{ vcard }] 
+                        } 
+                    });
                     
+                    // Send welcome message
+                    const welcome = `┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n┃\n┃ 🥀 *SYSTEM ARMED*\n┃\n┣━━━━━━━━━━━━━━━━━━━━━━━┓\n┃ 🛡️ *DEV    :* STANYTZ\n┃ ⚙️ *VERSION:* 6.6.0\n┃ 🌐 *ENGINE :* AngularSockets\n┃ 🌷 *PREFIX :* [ . ]\n┃ 📦 *COMMANDS :* ${commands.size}\n┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n🥀🥂 *BOT ACTIVE AND READY*`;
                     await sock.sendMessage(sock.user.id, { text: welcome });
                     
-                    // Save successful connection to Firebase
-                    const sessionRef = doc(db, 'bots', 'wt6');
-                    await setDoc(sessionRef, {
-                        status: 'online',
-                        botId: botId,
-                        lastOnline: new Date().toISOString(),
-                        commands: commands.size,
-                        pairingCode: null // Clear pairing code after success
-                    }, { merge: true });
-                    
-                    pairingCode = null;
-                    pairingNumber = null;
-                    
                 } catch (error) {
-                    console.error('Welcome message error:', error.message);
+                    console.error('Error sending welcome messages:', error.message);
                 }
             }
             
             if (connection === 'close') {
-                isConnected = false;
-                const statusCode = lastDisconnect?.error?.output?.statusCode;
-                const errorMessage = lastDisconnect?.error?.message || 'Unknown';
+                const reason = lastDisconnect?.error?.output?.statusCode;
+                console.log(`🔌 Connection closed. Reason code: ${reason || 'Unknown'}`);
                 
-                console.log(`🔌 Connection closed: ${statusCode} - ${errorMessage}`);
-                
-                if (statusCode === DisconnectReason.loggedOut || 
-                    errorMessage.includes('401') || 
-                    errorMessage.includes('Not Authorized')) {
-                    
-                    console.log('🚫 Session logged out. New pairing required.');
-                    
-                    // Clear session data
-                    try {
-                        const sessionRef = doc(db, 'bots', 'wt6');
-                        await setDoc(sessionRef, {
-                            status: 'logged_out',
-                            lastLogout: new Date().toISOString(),
-                            pairingCode: null
-                        }, { merge: true });
-                        
-                        // Delete local session
-                        if (fs.existsSync('./session.json')) {
-                            fs.unlinkSync('./session.json');
-                        }
-                        
-                    } catch (error) {
-                        console.error('Session cleanup error:', error.message);
-                    }
-                    
-                    // Wait and try to reconnect with new pairing
-                    setTimeout(() => {
-                        console.log('🔄 Ready for new pairing...');
-                        // Don't auto-reconnect - wait for new pairing
-                    }, 5000);
-                    
+                if (reason !== DisconnectReason.loggedOut) {
+                    console.log('🔄 Attempting to reconnect...');
+                    setTimeout(startBot, 5000);
                 } else {
-                    // Network error - try to reconnect
-                    console.log('🔄 Reconnecting in 10 seconds...');
-                    setTimeout(() => connectToWhatsApp(sock?.authState), 10000);
+                    console.log('❌ Logged out. Please scan QR code again.');
                 }
+            }
+            
+            if (update.qr) {
+                console.log('📱 QR Code received. Scan with WhatsApp.');
             }
         });
         
-        // Message handler
+        // Handle incoming messages
         sock.ev.on('messages.upsert', async ({ messages }) => {
-            try {
-                const m = messages[0];
-                if (!m.message || m.key.fromMe) return;
-                
-                const from = m.key.remoteJid;
-                const body = (
-                    m.message.conversation || 
-                    m.message.extendedTextMessage?.text || 
-                    m.message.imageMessage?.caption || 
-                    ""
-                ).trim();
-                
-                if (body.startsWith('.')) {
+            const m = messages[0];
+            
+            // Ignore if no message or from self
+            if (!m.message || m.key.fromMe) return;
+            
+            const from = m.key.remoteJid;
+            const body = (m.message.conversation || 
+                         m.message.extendedTextMessage?.text || 
+                         m.message.imageMessage?.caption || 
+                         "").trim();
+            
+            // Only process commands starting with .
+            if (body.startsWith('.')) {
+                try {
+                    // Parse command
                     const args = body.slice(1).trim().split(/ +/);
-                    const cmdName = args.shift().toLowerCase();
+                    const cmdName = args.shift()?.toLowerCase().trim();
                     
+                    if (!cmdName) return; // No command provided
+                    
+                    // Get command
                     const cmd = commands.get(cmdName);
-                    if (cmd) {
-                        console.log(`📨 Command: ${cmd.name} from ${from.split('@')[0]}`);
-                        await cmd.execute(m, sock, Array.from(commands.values()), args);
+                    
+                    if (!cmd) {
+                        // Command not found
+                        await sock.sendMessage(from, { 
+                            text: `❌ Command "${cmdName}" not found.\nType .help to see available commands.` 
+                        });
+                        return;
                     }
+                    
+                    // Send typing indicator
+                    await sock.sendPresenceUpdate('composing', from);
+                    
+                    // Execute command
+                    await cmd.execute(m, sock, Array.from(commands.values()), args);
+                    
+                } catch (error) {
+                    console.error(`Command execution error:`, error);
+                    await sock.sendMessage(from, { 
+                        text: `❌ Error executing command: ${error.message}` 
+                    });
                 }
-                
-            } catch (error) {
-                console.error('Message processing error:', error.message);
             }
         });
         
-        // Keep-alive
+        // Auto-reject calls
+        sock.ev.on('call', async (calls) => {
+            if (calls[0]) {
+                try {
+                    await sock.rejectCall(calls[0].id, calls[0].from);
+                    console.log(`📞 Call rejected from ${calls[0].from}`);
+                } catch (error) {
+                    console.error('Error rejecting call:', error.message);
+                }
+            }
+        });
+        
+        // Keep connection alive
         setInterval(() => {
             if (sock?.user) {
                 sock.sendPresenceUpdate('available');
@@ -328,251 +291,133 @@ async function connectToWhatsApp(authState = null) {
         }, 30000);
         
     } catch (error) {
-        console.error('❌ Connection error:', error.message);
-        console.log('🔄 Retrying in 15 seconds...');
-        setTimeout(() => connectToWhatsApp(), 15000);
+        console.error('❌ Bot startup failed:', error);
+        console.log('🔄 Retrying in 10 seconds...');
+        setTimeout(startBot, 10000);
     }
 }
 
-async function startBot() {
-    console.log('🚀 Starting WRONG TURN 6 (Pairing-Only Mode)');
-    console.log('📡 No QR Codes - Pairing Code Only');
-    loadCmds();
+// Zero-wait pairing endpoint
+app.get('/code', async (req, res) => {
+    let num = req.query.number;
     
-    // Try to load existing session
-    try {
-        if (fs.existsSync('./session.json')) {
-            console.log('📥 Loading existing session...');
-            const sessionData = JSON.parse(fs.readFileSync('./session.json', 'utf8'));
-            await connectToWhatsApp(sessionData);
-        } else {
-            console.log('📭 No existing session found');
-            console.log('💡 Use /pair?number=PHONE to get pairing code');
-        }
-    } catch (error) {
-        console.log('❌ Session load failed:', error.message);
-        await connectToWhatsApp();
-    }
-}
-
-// API Routes
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Main pairing endpoint
-app.get('/pair', async (req, res) => {
-    try {
-        const number = req.query.number;
-        if (!number) {
-            return res.json({ 
-                success: false, 
-                error: "Phone number required. Use /pair?number=255XXXXXXXXX" 
-            });
-        }
-        
-        const cleanNumber = number.replace(/\D/g, '');
-        if (!cleanNumber.match(/^\d{10,15}$/)) {
-            return res.json({ 
-                success: false, 
-                error: "Invalid phone number format" 
-            });
-        }
-        
-        console.log(`📱 Pairing request for: ${cleanNumber}`);
-        
-        // If already connected, disconnect first
-        if (sock && isConnected) {
-            console.log('🔄 Disconnecting existing session...');
-            await sock.logout();
-            sock = null;
-            isConnected = false;
-            await delay(2000);
-        }
-        
-        // Start fresh connection
-        if (fs.existsSync('./session.json')) {
-            fs.unlinkSync('./session.json');
-        }
-        
-        // Initialize new socket for pairing
-        const { state, saveCreds } = useMemoryAuth();
-        const { version } = await fetchLatestBaileysVersion();
-        
-        const tempSock = makeWASocket({
-            auth: state,
-            version,
-            logger: pino({ level: 'silent' }),
-            browser: Browsers.macOS("Safari"),
-            printQRInTerminal: false,
-            markOnlineOnConnect: false,
+    if (!num) {
+        return res.status(400).json({ 
+            success: false, 
+            error: "Phone number required (e.g., /code?number=255123456789)" 
         });
+    }
+    
+    // Format number
+    num = num.replace(/\D/g, '');
+    
+    if (!num.startsWith('255') || num.length !== 12) {
+        return res.status(400).json({ 
+            success: false, 
+            error: "Invalid Tanzanian number format. Use 255XXXXXXXXX" 
+        });
+    }
+    
+    console.log(`📱 Pairing request for: ${num}`);
+    
+    try {
+        // Ensure bot is running
+        if (!sock) {
+            console.log('🤖 Starting bot for pairing...');
+            await startBot();
+            await delay(3000); // Wait for initialization
+        }
         
-        tempSock.ev.on('creds.update', saveCreds);
-        
-        // Request pairing code
-        try {
-            console.log(`🔐 Requesting pairing code for ${cleanNumber}...`);
-            const code = await tempSock.requestPairingCode(cleanNumber);
-            
-            // Save pairing info
-            pairingCode = code;
-            pairingNumber = cleanNumber;
-            
-            const sessionRef = doc(db, 'bots', 'wt6');
-            await setDoc(sessionRef, {
-                pairingCode: code,
-                pairingNumber: cleanNumber,
-                pairingTime: new Date().toISOString(),
-                status: 'pairing_pending'
-            }, { merge: true });
-            
-            console.log(`✅ Pairing code generated: ${code}`);
-            
-            // Close temporary socket
-            setTimeout(() => {
-                if (tempSock) tempSock.end(undefined);
-            }, 1000);
-            
-            res.json({
-                success: true,
-                code: code,
-                number: cleanNumber,
-                instructions: `Send this code to WhatsApp: *${code}*\\nEnter it in WhatsApp → Linked Devices → Link a Device`,
-                expires: "Code expires in 60 seconds"
-            });
-            
-            // Wait for pairing and connect
-            setTimeout(async () => {
-                console.log('🔄 Attempting to connect with new pairing...');
-                await delay(2000);
-                
-                if (fs.existsSync('./session.json')) {
-                    const sessionData = JSON.parse(fs.readFileSync('./session.json', 'utf8'));
-                    await connectToWhatsApp(sessionData);
-                }
-            }, 3000);
-            
-        } catch (pairError) {
-            console.error('❌ Pairing failed:', pairError.message);
-            
-            if (tempSock) tempSock.end(undefined);
-            
-            // Specific error handling
-            if (pairError.message.includes('timed out')) {
-                res.json({ 
+        // Wait for socket to be ready
+        let attempts = 0;
+        while (!sock || sock.connection !== 'open') {
+            await delay(1000);
+            attempts++;
+            if (attempts > 30) {
+                return res.status(408).json({ 
                     success: false, 
-                    error: "WhatsApp server timeout",
-                    solution: "Try again in 30 seconds" 
-                });
-            } else if (pairError.message.includes('precondition')) {
-                res.json({ 
-                    success: false, 
-                    error: "Phone not ready",
-                    solution: "Make sure WhatsApp is open on your phone" 
-                });
-            } else {
-                res.json({ 
-                    success: false, 
-                    error: pairError.message 
+                    error: "Bot initialization timeout. Try again." 
                 });
             }
         }
         
-    } catch (error) {
-        console.error('Pairing route error:', error);
-        res.json({ 
-            success: false, 
-            error: "Server error: " + error.message 
-        });
-    }
-});
-
-// Status endpoint
-app.get('/status', (req, res) => {
-    res.json({
-        bot: "WRONG TURN 6",
-        version: "6.6.0",
-        status: isConnected ? "🟢 ONLINE" : "🔴 OFFLINE",
-        connection: sock?.user ? {
-            id: sock.user.id.split(':')[0],
-            name: sock.user.name || 'Unknown'
-        } : null,
-        commands: commands.size,
-        pairing: {
-            code: pairingCode,
-            number: pairingNumber
-        },
-        uptime: process.uptime(),
-        mode: "Pairing-Code Only (No QR)"
-    });
-});
-
-// Force logout
-app.get('/logout', async (req, res) => {
-    try {
-        if (sock) {
-            await sock.logout();
-            sock = null;
-        }
+        // Request pairing code
+        const code = await sock.requestPairingCode(num);
         
-        if (fs.existsSync('./session.json')) {
-            fs.unlinkSync('./session.json');
-        }
-        
-        isConnected = false;
-        
-        const sessionRef = doc(db, 'bots', 'wt6');
-        await setDoc(sessionRef, {
-            status: 'logged_out',
-            lastLogout: new Date().toISOString(),
-            pairingCode: null
-        }, { merge: true });
+        console.log(`✅ Pairing code generated for ${num}: ${code}`);
         
         res.json({ 
             success: true, 
-            message: "Logged out successfully. New pairing required." 
+            number: num, 
+            code: code,
+            message: `Enter code ${code} on target phone's WhatsApp > Linked Devices > Link a Device`
         });
         
     } catch (error) {
-        res.json({ 
+        console.error('Pairing error:', error);
+        res.status(500).json({ 
             success: false, 
-            error: error.message 
+            error: error.message || "WhatsApp pairing failed. Check number format and try again." 
         });
     }
 });
 
-// Test command execution
-app.get('/test', (req, res) => {
-    res.json({
-        commands: Array.from(commands.keys()),
-        count: commands.size,
-        categories: [...new Set(Array.from(commands.values()).map(c => c.category))]
+// Bot status endpoint
+app.get('/status', (req, res) => {
+    const status = {
+        bot: sock ? {
+            connected: sock.connection === 'open',
+            user: sock.user?.id || 'Not logged in',
+            connection: sock.connection || 'disconnected'
+        } : null,
+        commands: {
+            loaded: commands.size,
+            categories: [...new Set(Array.from(commands.values()).map(cmd => cmd.category))]
+        },
+        timestamp: new Date().toISOString()
+    };
+    
+    res.json(status);
+});
+
+// Reload commands endpoint
+app.get('/reload', (req, res) => {
+    const before = commands.size;
+    loadCmds();
+    const after = commands.size;
+    
+    res.json({ 
+        success: true, 
+        message: `Commands reloaded. Before: ${before}, After: ${after}` 
     });
 });
 
-// Home page
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Root endpoint
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public/index.html'));
 });
 
-// Start server
+// Start server and bot
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🌐 WRONG TURN 6 Server`);
-    console.log(`📡 Port: ${PORT}`);
-    console.log(`🔧 Mode: Pairing-Code Authentication Only`);
-    console.log(`📱 Pairing URL: http://localhost:${PORT}/pair?number=YOUR_NUMBER`);
-    console.log(`📊 Status URL: http://localhost:${PORT}/status`);
-    console.log('='.repeat(50));
-    
-    startBot();
+    console.log(`🌐 Server running on port ${PORT}`);
+    console.log(`🔗 Pairing URL: http://localhost:${PORT}/code?number=255XXXXXXXXX\n`);
+    startBot().catch(console.error);
 });
 
-// Clean exit
-process.on('SIGINT', async () => {
-    console.log('\n🛑 Shutting down WRONG TURN 6...');
-    if (sock) {
-        await sock.logout();
-    }
+// Handle process exit
+process.on('SIGINT', () => {
+    console.log('\n👋 Shutting down WRONG TURN 6...');
     process.exit(0);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('🔥 Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('🔥 Unhandled Rejection at:', promise, 'reason:', reason);
 });
