@@ -1,6 +1,6 @@
 #  WRONG TURN 6
 <p align="center">
-  <img src="https://files.catbox.moe/59ays3.jpg" width="200" height="200" style="border-radius: 50%;">
+  <img src="https://files.catbox.moe/59ays3.jpg" width="300" height="200" style="border-radius: 50%;">
 </p>
 
 <p align="center">
