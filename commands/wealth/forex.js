@@ -1,7 +1,14 @@
+const axios = require('axios');
 module.exports = {
-    name: "forex",
-    async execute(sock, msg, args) {
-        const signal = `📉 *NEURAL FOREX SIGNAL* 📉\n\nPair: *XAUUSD (Gold)*\nAction: *SELL*\nEntry: 2045.00\nTP: 2030.00\nSL: 2055.00\n\n_Risk: High. Use proper lot size._`;
-        await sock.sendMessage(msg.key.remoteJid, { text: signal });
+    name: 'forex',
+    async execute(m, sock, commands, args) {
+        if (!args[1]) return m.reply("Usage: .forex USD TZS");
+        try {
+            const res = await axios.get(`https://api.exchangerate-api.com/v4/latest/${args[0].toUpperCase()}`);
+            const rate = res.data.rates[args[1].toUpperCase()];
+            if (!rate) return m.reply("Invalid Currency Code.");
+            const msg = `┏━━━━ 『 *FOREX EXCHANGE* 』 ━━━━┓\n┃\n┃ 🥀 *Base:* ${args[0].toUpperCase()}\n┃ 🥀 *Target:* ${args[1].toUpperCase()}\n┃ 🥀 *Rate:* ${rate}\n┃\n┗━━━━━━━━━━━━━━━━━━━┛\n*WRONG TURN 6 | STANYTZ INDUSTRIES* ✔️`;
+            m.reply(msg);
+        } catch (e) { m.reply("API Error. Ensure symbols are correct (e.g., USD, TZS)."); }
     }
 };
