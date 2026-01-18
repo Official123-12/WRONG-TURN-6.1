@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
 
-// --- ULINZI WA PRIVATE KEY (PEM FIX) ---
+// --- CORRECTED PRIVATE KEY ---
 const rawKey = `-----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDcpy6S8a0fJbRT
 7mcDBeJgh1Q4i0M296SiI/fq6YkJ5adOh9zQd70Km5tLttt9IajHJ1NdSjZLSnGT
@@ -25,7 +25,7 @@ MnMDyxMpb4zCHzG6YREVIXYeRQKBgQDfYK1XtuVgaxMf+kjV2jp/U3t54uobPH3D
 65pDrnslLZfe6eNJ+woHlxKgTgFqJnMjLGff1Tu1e7t99CbieRfEplmCyNttzHdm
 KXyCzr+G+llgkNpvfIZHS6ZEksay41oTcO0JkSVpTCCxs2osOSICM6yhi9qnYvre
 E/7QOviguwKBgQDbJ2CYw+uQuKnc5T0LyBQD2BDwWo+rbJSDO7FNppMa5vJhhN
-nty4fEOPPG1wFtPFtWnwAD54Ydr5ieemDFXx9qtjSp3EabRFC72px04GJ+T/XlhYM
+ty4fEOPPG1wFtPFtWnwAD54Ydr5ieemDFXx9qtjSp3EabRFC72px04GJ+T/XlhYM
 L+xaQuV2xa0tvRR0QelRg2g8yMz0bBmUPtCYv/0aUvd9IQW6zfa9BmPUtQKBgC42
 G+ZHihB2VlCJQMQtD2kD5kmC7heQXhxIA3P5BrTcR8zv6fuGGb8UO+A6AwToy2z9
 ZMfjnySeYl1eQyUbFBW0rFPoJa0DXbge4QlWqDzOUesuTGJACq95MP6CtuSPMDVR
@@ -38,9 +38,17 @@ NVhK+Ycb7OpMDt2fyWIkyEY=
 const cleanKey = rawKey.replace(/\\n/g, '\n').trim();
 
 const serviceAccount = {
+    "type": "service_account",
     "project_id": "stanybots",
+    "private_key_id": "746be8a70fe0db83f0436d9d030c46c47d7c84f6",
+    "private_key": cleanKey,
     "client_email": "firebase-adminsdk-fbsvc@stanybots.iam.gserviceaccount.com",
-    "private_key": cleanKey
+    "client_id": "103847718279811211149",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40stanybots.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com"
 };
 
 // INITIALIZE FIREBASE
@@ -50,8 +58,10 @@ if (!admin.apps.length) {
         console.log("🔥 FIREBASE CONNECTED SUCCESSFULLY");
     } catch (e) {
         console.error("❌ FIREBASE FATAL ERROR:", e.message);
+        console.error("Full error details:", e);
     }
 }
+
 const db = admin.firestore();
 const commands = new Map();
 const sockCache = new Map();
