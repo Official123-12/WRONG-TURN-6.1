@@ -31,13 +31,13 @@ const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true
 const app = express();
 const commands = new Map();
 let sock = null;
-let welcomeTracker = new Set();
 
-// 1. COMMAND LOADER (SUBFOLDERS)
+// 1. COMMAND LOADER (SCANS ALL SUBFOLDERS)
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
-    fs.readdirSync(cmdPath).forEach(folder => {
+    const folders = fs.readdirSync(cmdPath);
+    folders.forEach(folder => {
         const folderPath = path.join(cmdPath, folder);
         if (fs.lstatSync(folderPath).isDirectory()) {
             fs.readdirSync(folderPath).filter(f => f.endsWith('.js')).forEach(file => {
@@ -53,7 +53,7 @@ const loadCmds = () => {
     });
 };
 
-// 2. FIREBASE AUTH HANDLER
+// 2. FIREBASE AUTH SYSTEM
 async function useFirebaseAuthState(db, collectionName) {
     const fixId = (id) => id.replace(/\//g, '__').replace(/\@/g, 'at');
     const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
@@ -97,11 +97,9 @@ async function useFirebaseAuthState(db, collectionName) {
 async function startBot() {
     loadCmds();
     const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS");
-    const { version } = await fetchLatestBaileysVersion();
-
+    
     sock = makeWASocket({
         auth: state,
-        version,
         logger: pino({ level: 'silent' }),
         browser: Browsers.macOS("Safari"),
         printQRInTerminal: false,
@@ -113,16 +111,12 @@ async function startBot() {
     sock.ev.on('connection.update', async (u) => {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
-            const botId = sock.user.id.split(':')[0];
-            if (!welcomeTracker.has(botId)) {
-                const welcome = `┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n┃\n┃ 🥀 *SYSTEM ARMED & ACTIVE*\n┃\n┣━━━━━━━━━━━━┓\n┃ 🛡️ *DEV    :* STANYTZ\n┃ ⚙️ *VERSION:* 6.6.0\n┃ 🌐 *ENGINE :* AngularSockets\n┃ 🌷 *PREFIX :* [ . ]\n┗━━━━━━━━━━━━━━━┛\n\n🥀🥂 *ACTIVE*`;
-                await sock.sendMessage(sock.user.id, { text: welcome });
-                welcomeTracker.add(botId);
-            }
-            console.log("✅ WT6 ONLINE");
+            console.log("WRONG TURN 6: ONLINE");
+            await sock.sendMessage(sock.user.id, { text: "*W R O N G  T U R N  6* ✔️\n_System Armed & Operational._" });
         }
         if (connection === 'close') {
-            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
+            const reason = lastDisconnect?.error?.output?.statusCode;
+            if (reason !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
         }
     });
 
@@ -132,10 +126,7 @@ async function startBot() {
         const from = m.key.remoteJid;
         const body = (m.message.conversation || m.message.extendedTextMessage?.text || "").trim();
 
-        // Always Online + Auto Typing
         await sock.sendPresenceUpdate('composing', from);
-
-        if (from === 'status@broadcast') await sock.readMessages([m.key]);
 
         if (body.startsWith('.')) {
             const args = body.slice(1).trim().split(/ +/);
@@ -149,15 +140,15 @@ async function startBot() {
     setInterval(() => { if (sock?.user) sock.sendPresenceUpdate('available'); }, 15000);
 }
 
-// 4. ZERO-ERROR PAIRING ROUTE
+// 4. THE FIX: CLEAN PAIRING ROUTE
 app.get('/code', async (req, res) => {
     let num = req.query.number;
-    if (!num) return res.status(400).send({ error: "No number" });
+    if (!num) return res.status(400).send({ error: "Number Required" });
 
     try {
-        // Tunatengeneza fresh instance ya kodi pekee. 
-        // Hii haiangalii Firebase, hivyo haina "Precondition Required"
-        const pSock = makeWASocket({
+        // Use brand new, clean In-Memory Auth for code generation
+        // This bypasses the 'Precondition Required' error
+        const pairingSock = makeWASocket({
             auth: {
                 creds: initAuthCreds(),
                 keys: makeCacheableSignalKeyStore({}, pino({ level: 'silent' }))
@@ -166,22 +157,24 @@ app.get('/code', async (req, res) => {
             browser: Browsers.macOS("Safari")
         });
 
-        await delay(2000);
-        let code = await pSock.requestPairingCode(num.replace(/\D/g, ''));
+        await delay(3000);
+        let code = await pairingSock.requestPairingCode(num.replace(/\D/g, ''));
         res.send({ code });
 
-        // Tukishapata kodi, tunasikiliza ikifanikiwa ku-link tu-save kwenye Firebase
-        pSock.ev.on('creds.update', async (creds) => {
-            const { saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS");
-            // Hapa itaji-save yenyewe Firebase pindi tu ukimaliza ku-link kwenye simu
+        // On successful link, save these specific working creds to Firebase
+        pairingSock.ev.on('creds.update', async (creds) => {
             await setDoc(doc(db, "WT6_SESSIONS", "creds"), JSON.parse(JSON.stringify(creds, BufferJSON.replacer)));
         });
 
     } catch (e) {
-        res.status(500).send({ error: "WhatsApp Busy. Try in 10s." });
+        console.error(e);
+        res.status(500).send({ error: "Server Busy. Try again." });
     }
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => { console.log(`Server: ${PORT}`); startBot(); });
+app.listen(PORT, () => { 
+    console.log(`WRONG TURN 6: PORT ${PORT}`); 
+    startBot(); 
+});
