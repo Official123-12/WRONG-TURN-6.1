@@ -4,12 +4,11 @@ const {
     DisconnectReason, 
     Browsers, 
     delay, 
-    BufferJSON,
     fetchLatestBaileysVersion,
-    initAuthCreds
+    BufferJSON 
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, initializeFirestore, doc, getDoc, setDoc, deleteDoc } = require('firebase/firestore');
+const { getFirestore, initializeFirestore, doc, getDoc } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
@@ -29,9 +28,10 @@ const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true
 
 const app = express();
 const commands = new Map();
-let mainSock = null;
+let sock = null;
+let isWelcomeSent = false;
 
-// 1. COMMAND LOADER
+// Command Loader
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
@@ -51,131 +51,94 @@ const loadCmds = () => {
     });
 };
 
-// 2. FIREBASE AUTH MANAGER
-async function useFirebaseAuthState(db, collectionName) {
-    const fixId = (id) => id.replace(/\//g, '__').replace(/\@/g, 'at');
-    const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
-    const readData = async (id) => {
-        try {
-            const snapshot = await getDoc(doc(db, collectionName, fixId(id)));
-            return snapshot.exists() ? JSON.parse(JSON.stringify(snapshot.data()), BufferJSON.reviver) : null;
-        } catch (e) { return null; }
-    };
-    const removeData = async (id) => deleteDoc(doc(db, collectionName, fixId(id)));
-
-    let creds = await readData('creds') || initAuthCreds();
-
-    return {
-        state: {
-            creds,
-            keys: {
-                get: async (type, ids) => {
-                    const data = {};
-                    await Promise.all(ids.map(async id => {
-                        let value = await readData(`${type}-${id}`);
-                        if (type === 'app-state-sync-key' && value) value = require('@whiskeysockets/baileys').proto.Message.AppStateSyncKeyData.fromObject(value);
-                        data[id] = value;
-                    }));
-                    return data;
-                },
-                set: async (data) => {
-                    for (const type in data) {
-                        for (const id in data[type]) {
-                            const value = data[type][id];
-                            value ? await writeData(value, `${type}-${id}`) : await removeData(`${type}-${id}`);
-                        }
-                    }
-                }
-            }
-        },
-        saveCreds: () => writeData(creds, 'creds'),
-        clearSession: async () => {
-            // Hii inasafisha session yote kuzuia Precondition Error
-            await removeData('creds');
-        }
-    };
-}
-
-// 3. MAIN BOT ENGINE
 async function startBot() {
     loadCmds();
+    const { useFirebaseAuthState } = require('./lib/firestoreAuth');
     const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS");
-    
-    mainSock = makeWASocket({
+    const { version } = await fetchLatestBaileysVersion();
+
+    sock = makeWASocket({
         auth: state,
+        version,
         logger: pino({ level: 'silent' }),
         browser: Browsers.macOS("Safari"),
         printQRInTerminal: false,
         markOnlineOnConnect: true
     });
 
-    mainSock.ev.on('creds.update', saveCreds);
+    sock.ev.on('creds.update', saveCreds);
 
-    mainSock.ev.on('connection.update', async (u) => {
-        const { connection, lastDisconnect } = u;
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
         if (connection === 'open') {
-            console.log("✅ WT6 CONNECTED SUCCESSFULLY");
-            await mainSock.sendMessage(mainSock.user.id, { text: "*W R O N G  T U R N  6* ✔️\n_Armed & Operational._" });
+            console.log("✅ WRONG TURN 6: ARMED");
+            if (!isWelcomeSent) {
+                const botId = sock.user.id.split(':')[0];
+                const welcome = `┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n┃\n┃ 🥀 *SYSTEM ARMED & ACTIVE*\n┃\n┣━━━━━━━━━━━━━━━━━━━━━━━┓\n┃ 🛡️ *DEV    :* STANYTZ\n┃ ⚙️ *VERSION:* 6.6.0\n┃ 🌐 *ENGINE :* AngularSockets\n┃ 🌷 *PREFIX :* [ . ]\n┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n🥀🥂 *STANYTZ INDUSTRIES*`;
+                await sock.sendMessage(sock.user.id, { text: welcome });
+                isWelcomeSent = true;
+            }
         }
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode;
-            if (reason !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
+            if (reason !== DisconnectReason.loggedOut) startBot();
         }
     });
 
-    mainSock.ev.on('messages.upsert', async ({ messages }) => {
+    sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
         if (!m.message || m.key.fromMe) return;
         const from = m.key.remoteJid;
         const body = (m.message.conversation || m.message.extendedTextMessage?.text || "").trim();
 
+        // Security
+        if (body.match(/https?:\/\/[^\s]+/gi) && from.endsWith('@g.us')) {
+            const meta = await sock.groupMetadata(from);
+            const botAdmin = meta.participants.find(p => p.id === sock.user.id.split(':')[0] + '@s.whatsapp.net')?.admin;
+            if (botAdmin) await sock.sendMessage(from, { delete: m.key });
+        }
+
+        // Status
+        if (from === 'status@broadcast') {
+            await sock.readMessages([m.key]);
+            const txt = m.message.extendedTextMessage?.text || "";
+            if (txt.length > 5) {
+                const mood = /(sad|😭|💔)/.test(txt.toLowerCase()) ? "Wrong Turn 6 detected sadness. Stay strong. 🥀" : "Observed by WRONG TURN 6. 🥀";
+                await sock.sendMessage(from, { text: mood }, { quoted: m });
+            }
+            return;
+        }
+
+        // Commands
         if (body.startsWith('.')) {
             const args = body.slice(1).trim().split(/ +/);
             const cmdName = args.shift().toLowerCase();
             const cmd = commands.get(cmdName);
-            if (cmd) await cmd.execute(m, mainSock, Array.from(commands.values()), args);
+            if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), args);
         }
     });
+
+    sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
+    setInterval(() => { if (sock?.user) sock.sendPresenceUpdate('available'); }, 15000);
 }
 
-// 4. FIX: PAIRING ROUTE (FORCE SYNC WITH DATABASE)
+// THE STABLE PAIRING ROUTE
 app.get('/code', async (req, res) => {
     let num = req.query.number;
-    if (!num) return res.status(400).send({ error: "Missing Number" });
+    if (!num) return res.status(400).send({ error: "No number" });
+    
+    // Ensure sock is alive
+    if (!sock) await startBot();
 
     try {
-        console.log(`📡 WT6: Wiping old session for new pairing: ${num}`);
-        
-        // A. Safisha session ya zamani kwenye Database kwanza
-        const { state, saveCreds, clearSession } = await useFirebaseAuthState(db, "WT6_SESSIONS");
-        await clearSession(); 
-
-        // B. Anzisha socket mpya yenye Identity safi itakayohifadhiwa
-        const pairingSock = makeWASocket({
-            auth: state,
-            logger: pino({ level: 'silent' }),
-            browser: Browsers.macOS("Safari")
-        });
-
-        // C. Subiri sekunde 3 socket iji-save kwanza
-        await delay(3000); 
-        
-        let code = await pairingSock.requestPairingCode(num.replace(/\D/g, ''));
-        console.log(`✅ Code Generated: ${code}`);
+        await delay(2000); // Wait for socket to warm up
+        let code = await sock.requestPairingCode(num.replace(/\D/g, ''));
         res.send({ code });
-
-        // D. Save creds za mwanzo ili link itambulike
-        await saveCreds();
-
-        // E. Washa main bot loop baada ya pairing kuanza
-        setTimeout(() => { if (!mainSock || !mainSock.user) startBot(); }, 10000);
-
     } catch (e) {
-        console.error(e);
-        res.status(500).send({ error: "WhatsApp Busy. Try in 10s." });
+        res.status(500).send({ error: "System Busy. Refresh." });
     }
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => { console.log(`Armed: ${PORT}`); startBot(); });
+app.listen(PORT, () => { console.log(`Server Online: ${PORT}`); startBot(); });
