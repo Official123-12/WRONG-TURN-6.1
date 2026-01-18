@@ -6,7 +6,6 @@ const {
     delay, 
     BufferJSON,
     fetchLatestBaileysVersion,
-    makeCacheableSignalKeyStore,
     initAuthCreds
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
@@ -32,7 +31,7 @@ const app = express();
 const commands = new Map();
 let mainSock = null;
 
-// 1. COMMAND LOADER (STRICT SUBFOLDERS)
+// 1. COMMAND LOADER
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
@@ -52,9 +51,9 @@ const loadCmds = () => {
     });
 };
 
-// 2. FIREBASE AUTH MANAGER (FIXED ID SANITIZATION)
-async function useFirebaseAuthState(db, collectionName, sessionId = "MASTER") {
-    const fixId = (id) => `${sessionId}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`;
+// 2. FIREBASE AUTH MANAGER
+async function useFirebaseAuthState(db, collectionName) {
+    const fixId = (id) => id.replace(/\//g, '__').replace(/\@/g, 'at');
     const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
     const readData = async (id) => {
         try {
@@ -62,7 +61,8 @@ async function useFirebaseAuthState(db, collectionName, sessionId = "MASTER") {
             return snapshot.exists() ? JSON.parse(JSON.stringify(snapshot.data()), BufferJSON.reviver) : null;
         } catch (e) { return null; }
     };
-    
+    const removeData = async (id) => deleteDoc(doc(db, collectionName, fixId(id)));
+
     let creds = await readData('creds') || initAuthCreds();
 
     return {
@@ -82,17 +82,21 @@ async function useFirebaseAuthState(db, collectionName, sessionId = "MASTER") {
                     for (const type in data) {
                         for (const id in data[type]) {
                             const value = data[type][id];
-                            value ? await writeData(value, `${type}-${id}`) : null;
+                            value ? await writeData(value, `${type}-${id}`) : await removeData(`${type}-${id}`);
                         }
                     }
                 }
             }
         },
-        saveCreds: () => writeData(creds, 'creds')
+        saveCreds: () => writeData(creds, 'creds'),
+        clearSession: async () => {
+            // Hii inasafisha session yote kuzuia Precondition Error
+            await removeData('creds');
+        }
     };
 }
 
-// 3. MAIN ENGINE START
+// 3. MAIN BOT ENGINE
 async function startBot() {
     loadCmds();
     const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS");
@@ -101,7 +105,7 @@ async function startBot() {
         auth: state,
         logger: pino({ level: 'silent' }),
         browser: Browsers.macOS("Safari"),
-        syncFullHistory: false,
+        printQRInTerminal: false,
         markOnlineOnConnect: true
     });
 
@@ -110,11 +114,12 @@ async function startBot() {
     mainSock.ev.on('connection.update', async (u) => {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
-            console.log("✅ WT6 CONNECTED");
-            await mainSock.sendMessage(mainSock.user.id, { text: "*W R O N G  T U R N  6* ✔️\n_System Operational._" });
+            console.log("✅ WT6 CONNECTED SUCCESSFULLY");
+            await mainSock.sendMessage(mainSock.user.id, { text: "*W R O N G  T U R N  6* ✔️\n_Armed & Operational._" });
         }
         if (connection === 'close') {
-            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) startBot();
+            const reason = lastDisconnect?.error?.output?.statusCode;
+            if (reason !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
         }
     });
 
@@ -131,30 +136,39 @@ async function startBot() {
             if (cmd) await cmd.execute(m, mainSock, Array.from(commands.values()), args);
         }
     });
-
-    setInterval(() => { if (mainSock?.user) mainSock.sendPresenceUpdate('available'); }, 15000);
 }
 
-// 4. THE ULTIMATE PAIRING FIX (FORCE NEW IDENTITY)
+// 4. FIX: PAIRING ROUTE (FORCE SYNC WITH DATABASE)
 app.get('/code', async (req, res) => {
     let num = req.query.number;
     if (!num) return res.status(400).send({ error: "Missing Number" });
 
     try {
-        // Hapa tunalazimisha 'creds' mpya kila wakati kodi inapoombwa
-        // Hii inakata mzizi wa 'Precondition Required'
+        console.log(`📡 WT6: Wiping old session for new pairing: ${num}`);
+        
+        // A. Safisha session ya zamani kwenye Database kwanza
+        const { state, saveCreds, clearSession } = await useFirebaseAuthState(db, "WT6_SESSIONS");
+        await clearSession(); 
+
+        // B. Anzisha socket mpya yenye Identity safi itakayohifadhiwa
         const pairingSock = makeWASocket({
-            auth: { creds: initAuthCreds(), keys: makeCacheableSignalKeyStore({}, pino({level:'silent'})) },
+            auth: state,
             logger: pino({ level: 'silent' }),
             browser: Browsers.macOS("Safari")
         });
 
-        await delay(3000); // Subiri socket ijipe nguvu
+        // C. Subiri sekunde 3 socket iji-save kwanza
+        await delay(3000); 
+        
         let code = await pairingSock.requestPairingCode(num.replace(/\D/g, ''));
+        console.log(`✅ Code Generated: ${code}`);
         res.send({ code });
 
-        // Ulinzi: Tukishapata kodi, tunazima hii instance ya muda
-        setTimeout(() => { try { pairingSock.ws.close(); } catch(e){} }, 60000);
+        // D. Save creds za mwanzo ili link itambulike
+        await saveCreds();
+
+        // E. Washa main bot loop baada ya pairing kuanza
+        setTimeout(() => { if (!mainSock || !mainSock.user) startBot(); }, 10000);
 
     } catch (e) {
         console.error(e);
