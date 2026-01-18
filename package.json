@@ -1,18 +1,16 @@
 {
   "name": "wrong-turn-6",
   "version": "6.6.0",
-  "description": "WhatsApp Bot by STANYTZ",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "6.6.0",
+    "@whiskeysockets/baileys": "npm:angularsockets",
     "firebase": "^10.7.1",
     "express": "^4.19.2",
     "fs-extra": "^11.2.0",
     "pino": "^8.21.0",
-    "axios": "^1.6.8",
-    "dotenv": "^16.4.5"
+    "axios": "^1.6.8"
   }
 }
