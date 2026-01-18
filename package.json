@@ -1,6 +1,7 @@
 {
   "name": "wrong-turn-6",
   "version": "6.6.0",
+  "description": "WRONG TURN 6 by STANYTZ",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -11,6 +12,9 @@
     "express": "^4.19.2",
     "fs-extra": "^11.2.0",
     "pino": "^8.21.0",
-    "axios": "^1.6.8"
+    "axios": "^1.6.8",
+    "jimp": "^0.22.10",
+    "dotenv": "^16.4.5",
+    "path": "^0.12.7"
   }
 }
