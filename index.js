@@ -52,7 +52,7 @@ const loadCmds = () => {
     });
 };
 
-// 2. FIREBASE AUTH HANDLER (Optimized for Linking)
+// 2. FIREBASE AUTH HANDLER
 async function useFirebaseAuthState(db, collectionName, sessionId) {
     const fixId = (id) => `${sessionId}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`;
     const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
@@ -90,21 +90,24 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
             }
         },
         saveCreds: () => writeData(creds, 'creds'),
-        wipeCreds: () => removeData('creds') // Crucial for new pairing
+        clearSession: () => removeData('creds')
     };
 }
 
 // 3. MAIN BOT ENGINE
 async function startBot() {
     loadCmds();
-    const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", "WT6_MASTER");
+    const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
     
     sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.ubuntu('Chrome'), // Faster Link speed
+        browser: Browsers.macOS("Safari"), // User Preferred
         printQRInTerminal: false,
-        markOnlineOnConnect: true
+        markOnlineOnConnect: true,
+        connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: 0,
+        keepAliveIntervalMs: 10000
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -118,7 +121,7 @@ async function startBot() {
         }
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode;
-            if (reason !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
+            if (reason !== DisconnectReason.loggedOut) startBot();
         }
     });
 
@@ -128,9 +131,8 @@ async function startBot() {
         const from = m.key.remoteJid;
         const body = (m.message.conversation || m.message.extendedTextMessage?.text || "").trim();
 
-        // Auto Presence
+        // Auto Typing
         await sock.sendPresenceUpdate('composing', from);
-        if (Math.random() > 0.5) await sock.sendPresenceUpdate('recording', from);
 
         if (body.startsWith('.')) {
             const args = body.slice(1).trim().split(/ +/);
@@ -140,49 +142,43 @@ async function startBot() {
         }
     });
 
-    setInterval(() => { if (sock?.user) sock.sendPresenceUpdate('available'); }, 15000);
+    sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
 }
 
-// 4. THE ULTIMATE STABLE PAIRING ROUTE
+// 4. THE ULTIMATE PAIRING ROUTE (FIXED INFINITE LOADING)
 app.get('/code', async (req, res) => {
     let num = req.query.number;
-    if (!num) return res.status(400).send({ error: "No number" });
+    if (!num) return res.status(400).send({ error: "Missing Number" });
 
     try {
-        // Step 1: Wipe old session to prevent "Precondition Required"
-        const auth = await useFirebaseAuthState(db, "WT6_SESSIONS", "WT6_MASTER");
-        await auth.wipeCreds();
+        // Step 1: Wipe old creds to ensure 100% clean handshake
+        const auth = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
+        await auth.clearSession();
 
-        // Step 2: Create a NEW socket specifically for this pairing request
-        const pSock = makeWASocket({
-            auth: {
-                creds: initAuthCreds(),
-                keys: makeCacheableSignalKeyStore({}, pino({level:'silent'}))
-            },
+        // Step 2: Initialize ONE socket and keep it alive
+        sock = makeWASocket({
+            auth: auth.state,
             logger: pino({ level: 'silent' }),
-            browser: Browsers.ubuntu('Chrome')
+            browser: Browsers.macOS("Safari")
         });
 
-        await delay(3000); // Handshake stabilization
-        let code = await pSock.requestPairingCode(num.replace(/\D/g, ''));
+        // Step 3: Wait for socket stabilization
+        await delay(5000); 
+
+        // Step 4: Request Code
+        let code = await sock.requestPairingCode(num.replace(/\D/g, ''));
+        console.log(`✅ Code for ${num}: ${code}`);
         res.send({ code });
 
-        // Step 3: Listen for the link success and save to Firebase
-        pSock.ev.on('creds.update', async (newCreds) => {
-            await setDoc(doc(db, "WT6_SESSIONS", "WT6_MASTER_creds"), JSON.parse(JSON.stringify(newCreds, BufferJSON.replacer)));
-        });
-
-        pSock.ev.on('connection.update', (u) => {
-            if (u.connection === 'open') {
-                console.log("Device Linked Successfully.");
-                pSock.ev.removeAllListeners();
-                startBot(); // Reboot the bot into the main loop
-            }
+        // Step 5: Important listeners to capture the link
+        sock.ev.on('creds.update', auth.saveCreds);
+        sock.ev.on('connection.update', (u) => {
+            if (u.connection === 'open') console.log("Link Confirmed!");
         });
 
     } catch (e) {
         console.error(e);
-        res.status(500).send({ error: "System busy. Refresh." });
+        res.status(500).send({ error: "Precondition Failed. Refresh and try again." });
     }
 });
 
