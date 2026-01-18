@@ -16,7 +16,6 @@ const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
 
-// 1. FIREBASE SETUP
 const firebaseConfig = {
     apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
     authDomain: "stanybots.firebaseapp.com",
@@ -31,13 +30,13 @@ const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true
 
 const app = express();
 const commands = new Map();
-let mainSock = null;
 
-// 2. COMMAND LOADER (SUBFOLDERS)
+// 1. COMMAND LOADER
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
-    fs.readdirSync(cmdPath).forEach(folder => {
+    const folders = fs.readdirSync(cmdPath);
+    folders.forEach(folder => {
         const folderPath = path.join(cmdPath, folder);
         if (fs.lstatSync(folderPath).isDirectory()) {
             fs.readdirSync(folderPath).filter(f => f.endsWith('.js')).forEach(file => {
@@ -47,15 +46,15 @@ const loadCmds = () => {
                         cmd.category = folder;
                         commands.set(cmd.name.toLowerCase(), cmd);
                     }
-                } catch (e) { console.error(`Error loading ${file}`); }
+                } catch (e) {}
             });
         }
     });
 };
 
-// 3. FIREBASE AUTH STATE HANDLER
-async function useFirebaseAuthState(db, collectionName) {
-    const fixId = (id) => id.replace(/\//g, '__').replace(/\@/g, 'at');
+// 2. FIREBASE AUTH HANDLER
+async function useFirebaseAuthState(db, collectionName, sessionId) {
+    const fixId = (id) => `${sessionId}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`;
     const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
     const readData = async (id) => {
         try {
@@ -83,7 +82,7 @@ async function useFirebaseAuthState(db, collectionName) {
                     for (const type in data) {
                         for (const id in data[type]) {
                             const value = data[type][id];
-                            value ? await writeData(value, `${type}-${id}`) : null;
+                            if (value) await writeData(value, `${type}-${id}`);
                         }
                     }
                 }
@@ -93,65 +92,60 @@ async function useFirebaseAuthState(db, collectionName) {
     };
 }
 
-// 4. MAIN BOT EXECUTION
-async function startBot() {
+// 3. MAIN BOT PROCESS
+async function startBot(sessionId = "MASTER_SESSION") {
     loadCmds();
-    const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS");
+    const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", sessionId);
     
-    mainSock = makeWASocket({
+    const sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
         browser: Browsers.macOS("Safari"),
-        printQRInTerminal: false,
         markOnlineOnConnect: true
     });
 
-    mainSock.ev.on('creds.update', saveCreds);
+    sock.ev.on('creds.update', saveCreds);
 
-    mainSock.ev.on('connection.update', async (u) => {
+    sock.ev.on('connection.update', async (u) => {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
-            console.log("WRONG TURN 6: ONLINE");
-            await mainSock.sendMessage(mainSock.user.id, { text: "*W R O N G  T U R N  6* ✔️\n_System Operational._" });
+            console.log(`✅ WT6 ONLINE: ${sessionId}`);
+            await sock.sendMessage(sock.user.id, { text: "*W R O N G  T U R N  6* ✔️\n_System Armed & Operational._" });
         }
         if (connection === 'close') {
-            const reason = lastDisconnect?.error?.output?.statusCode;
-            if (reason !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
+            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) startBot(sessionId);
         }
     });
 
-    mainSock.ev.on('messages.upsert', async ({ messages }) => {
+    sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
         if (!m.message || m.key.fromMe) return;
         const from = m.key.remoteJid;
         const body = (m.message.conversation || m.message.extendedTextMessage?.text || "").trim();
 
-        // AUTO PRESENCE
-        await mainSock.sendPresenceUpdate('composing', from);
-
         if (body.startsWith('.')) {
             const args = body.slice(1).trim().split(/ +/);
             const cmdName = args.shift().toLowerCase();
             const cmd = commands.get(cmdName);
-            if (cmd) await cmd.execute(m, mainSock, Array.from(commands.values()), args);
+            if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), args);
         }
     });
 
-    setInterval(() => { if (mainSock?.user) mainSock.sendPresenceUpdate('available'); }, 15000);
+    setInterval(() => { if (sock?.user) sock.sendPresenceUpdate('available'); }, 15000);
 }
 
-// 5. THE ULTIMATE PAIRING FIX (ZERO 428 ERROR)
+// 4. THE ULTIMATE PAIRING FIX (DYNAMIC SESSION ID)
 app.get('/code', async (req, res) => {
     let num = req.query.number;
     if (!num) return res.status(400).send({ error: "Number missing" });
 
+    // Generate a random ID to ensure NO PRECONDITION error
+    const randomId = "WT6_" + Math.random().toString(36).substring(7);
+
     try {
-        // We create a separate temporary instance for pairing. 
-        // This ensures NO PRECONDITION REQUIRED because it doesn't touch old creds.
-        const pairingAuth = { creds: initAuthCreds(), keys: makeCacheableSignalKeyStore({}, pino({level:'silent'})) };
-        
+        const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", randomId);
         const pSock = makeWASocket({
-            auth: pairingAuth,
+            auth: state,
             logger: pino({ level: 'silent' }),
             browser: Browsers.macOS("Safari")
         });
@@ -160,21 +154,16 @@ app.get('/code', async (req, res) => {
         let code = await pSock.requestPairingCode(num.replace(/\D/g, ''));
         res.send({ code });
 
-        // IMPORTANT: Once linked, save these working creds to your Firebase
-        pSock.ev.on('creds.update', async (creds) => {
-            await setDoc(doc(db, "WT6_SESSIONS", "creds"), JSON.parse(JSON.stringify(creds, BufferJSON.replacer)));
+        pSock.ev.on('creds.update', saveCreds);
+        pSock.ev.on('connection.update', (u) => {
+            if (u.connection === 'open') console.log("New Device Linked Successfully.");
         });
 
     } catch (e) {
-        console.error(e);
-        res.status(500).send({ error: "WhatsApp Rate Limit. Try again in 1 minute." });
+        res.status(500).send({ error: "WhatsApp Busy." });
     }
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
-
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server Online: ${PORT}`);
-    startBot();
-});
+app.listen(PORT, () => { console.log(`Server: ${PORT}`); startBot(); });
