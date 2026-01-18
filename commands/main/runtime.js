@@ -1,11 +1,17 @@
 module.exports = {
     name: 'runtime',
     async execute(m, sock) {
-        const up = process.uptime();
-        const h = Math.floor(up / 3600);
-        const m1 = Math.floor((up % 3600) / 60);
-        const s = Math.floor(up % 60);
-        const msg = `┏━━『 *WRONG TURN 6* 』━━┓\n┃ 🥀 *Uptime:* ${h}h ${m1}m ${s}s\n┃ 🥀 *Developer:* STANYTZ\n┗━━━━━━━━━━━━━━━┛`;
-        m.reply(msg);
+        const from = m.key.remoteJid;
+        
+        const seconds = process.uptime();
+        const d = Math.floor(seconds / (3600 * 24));
+        const h = Math.floor((seconds % (3600 * 24)) / 3600);
+        const min = Math.floor((seconds % 3600) / 60);
+        const sec = Math.floor(seconds % 60);
+        
+        const uptime = `${d}d ${h}h ${min}m ${sec}s`;
+        const msg = `WRONG TURN 6 ✔️\nUptime: ${uptime}\nDeveloper: STANYTZ`;
+        
+        await sock.sendMessage(from, { text: msg }, { quoted: m });
     }
 };
