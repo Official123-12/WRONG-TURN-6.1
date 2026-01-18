@@ -28,21 +28,19 @@ const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true
 
 const app = express();
 const commands = new Map();
-const sockCache = new Map();
+let sock = null; // Global sock object
 
 /**
- * FIXED COMMAND LOADER (SCANS SUBFOLDERS)
+ * COMMAND LOADER (SCANS SUBFOLDERS)
  */
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
     
-    // Inasoma kila folder ndani ya /commands
     const categories = fs.readdirSync(cmdPath);
     for (const category of categories) {
         const categoryPath = path.join(cmdPath, category);
         if (fs.lstatSync(categoryPath).isDirectory()) {
-            // Inasoma kila file ndani ya subfolder
             const files = fs.readdirSync(categoryPath).filter(file => file.endsWith('.js'));
             for (const file of files) {
                 try {
@@ -53,7 +51,7 @@ const loadCmds = () => {
             }
         }
     }
-    console.log(`✅ LOADED: ${commands.size} COMMANDS FROM SUBFOLDERS`);
+    console.log(`📡 WRONG TURN 6: ${commands.size} Commands Operational`);
 };
 
 async function useFirebaseAuthState(db, collectionName) {
@@ -97,27 +95,33 @@ async function useFirebaseAuthState(db, collectionName) {
 
 async function startBot() {
     loadCmds();
-    const { state, saveCreds } = await useFirebaseAuthState(db, "WRONG_TURN_6_SESSIONS");
+    const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS");
     const { version } = await fetchLatestBaileysVersion();
 
-    const sock = makeWASocket({
+    sock = makeWASocket({
         auth: state,
         version,
         logger: pino({ level: 'silent' }),
         browser: Browsers.macOS("Safari"),
+        printQRInTerminal: false,
         markOnlineOnConnect: true
     });
 
-    sockCache.set("sock", sock);
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async (u) => {
-        if (u.connection === 'open') {
-            console.log("WRONG TURN 6: ONLINE");
-            // Welcome Message
-            await sock.sendMessage(sock.user.id, { text: "┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n┃ 🥀 Status: Online\n┃ 🥀 Dev: STANYTZ\n┗━━━━━━━━━━━━━━━━━━━━━━━┛" });
+        const { connection, lastDisconnect } = u;
+        if (connection === 'open') {
+            console.log("🔓 WRONG TURN 6: ARMED");
+            await sock.sendMessage(sock.user.id, { text: "┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n┃ 🥀 Status: Connected\n┃ 🥀 Dev: STANYTZ\n┗━━━━━━━━━━━━━━━━━━━━━━━┛" });
         }
-        if (u.connection === 'close') startBot();
+        if (connection === 'close') {
+            const reason = lastDisconnect?.error?.output?.statusCode;
+            if (reason !== DisconnectReason.loggedOut) {
+                console.log("🔌 Connection lost. Reconnecting...");
+                setTimeout(startBot, 5000); // Reconnect after 5s
+            }
+        }
     });
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
@@ -132,12 +136,15 @@ async function startBot() {
         await sock.sendPresenceUpdate('composing', from);
         await sock.sendPresenceUpdate('recording', from);
 
-        // ANTI-LINK (ALL LINKS)
+        // ANTI-LINK (STRICT)
         if (/(https?:\/\/[^\s]+)/g.test(body) && from.endsWith('@g.us')) {
             const metadata = await sock.groupMetadata(from);
             const isBotAdmin = metadata.participants.find(p => p.id === sock.user.id.split(':')[0] + '@s.whatsapp.net')?.admin;
             const isSenderAdmin = metadata.participants.find(p => p.id === sender)?.admin;
-            if (isBotAdmin && !isSenderAdmin) return await sock.sendMessage(from, { delete: m.key });
+            if (isBotAdmin && !isSenderAdmin) {
+                await sock.sendMessage(from, { delete: m.key });
+                return;
+            }
         }
 
         // MOOD STATUS REPLY
@@ -145,33 +152,56 @@ async function startBot() {
             await sock.readMessages([m.key]);
             const txt = m.message.extendedTextMessage?.text || "";
             if (txt.length > 5) {
-                const res = /(sad|😭|💔)/.test(txt.toLowerCase()) ? "Stay strong. 🥀" : /(happy|🔥|🚀)/.test(txt.toLowerCase()) ? "Keep winning. 🥂" : "Viewed by WT6. 🥀";
-                await sock.sendMessage(from, { text: res }, { quoted: m });
+                const mood = /(sad|😭|💔)/.test(txt.toLowerCase()) ? "WT6 detected sadness. Stay strong. 🥀" : 
+                             /(happy|🔥|🚀)/.test(txt.toLowerCase()) ? "Success detected. Keep winning. 🥂" : "Viewed by WT6. 🥀";
+                await sock.sendMessage(from, { text: mood }, { quoted: m });
             }
             return;
         }
 
-        // COMMAND EXECUTION
+        // COMMAND HANDLER
         if (body.startsWith('.')) {
             const args = body.slice(1).trim().split(/ +/);
             const cmdName = args.shift().toLowerCase();
             const cmd = commands.get(cmdName);
-            if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), args);
+            if (cmd) {
+                try {
+                    await cmd.execute(m, sock, Array.from(commands.values()), args);
+                } catch (e) { console.error(e); }
+            }
         }
     });
 
-    sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
-    setInterval(() => { if (sock.user) sock.sendPresenceUpdate('available'); }, 15000);
+    sock.ev.on('call', async (c) => {
+        await sock.rejectCall(c[0].id, c[0].from);
+        await sock.sendMessage(c[0].from, { text: "📵 *WRONG TURN 6 SECURITY:* Calls Blocked." });
+    });
+
+    setInterval(() => { if (sock && sock.user) sock.sendPresenceUpdate('available'); }, 15000);
 }
 
+// PAIRING CODE ROUTE (FIXED PRECONDITION ERROR)
 app.get('/code', async (req, res) => {
-    let s = sockCache.get("sock");
-    if (!s || !req.query.number) return res.status(400).send({ error: "Initializing" });
+    let num = req.query.number;
+    if (!num) return res.status(400).send({ error: "No number" });
+    
+    if (!sock) return res.status(428).send({ error: "Socket not initialized. Please wait." });
+
     try {
-        let code = await s.requestPairingCode(req.query.number.replace(/\D/g, ''));
+        console.log(`📱 Requesting code for: ${num}`);
+        // Tunahakikisha sock ipo kwenye state ya kuomba code
+        let code = await sock.requestPairingCode(num.replace(/\D/g, ''));
         res.send({ code });
-    } catch (e) { res.status(500).send({ error: e.message }); }
+    } catch (e) {
+        console.error("Pairing Error:", e.message);
+        res.status(500).send({ error: "Connection closed or Busy. Refresh and try again." });
+    }
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
-app.listen(process.env.PORT || 3000, startBot);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`🌐 WRONG TURN 6 Server: http://localhost:${PORT}`);
+    startBot();
+});
