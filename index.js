@@ -4,7 +4,8 @@ const {
     DisconnectReason, 
     Browsers, 
     fetchLatestBaileysVersion,
-    BufferJSON 
+    BufferJSON,
+    delay 
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
 const { getFirestore, initializeFirestore, doc, getDoc, setDoc, deleteDoc } = require('firebase/firestore');
@@ -13,7 +14,6 @@ const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
 
-// FIREBASE CONFIG
 const firebaseConfig = {
     apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
     authDomain: "stanybots.firebaseapp.com",
@@ -29,9 +29,8 @@ const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true
 const app = express();
 const commands = new Map();
 let sock = null;
-let isWelcomeSent = false; // Inazuia message kuwa nyingi
+let welcomeTracker = new Set(); // Inazuia spam ya messages
 
-// COMMAND LOADER
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
@@ -49,9 +48,9 @@ const loadCmds = () => {
             }
         }
     }
+    console.log(`📡 WT6: ${commands.size} Commands Armed.`);
 };
 
-// FIREBASE AUTH
 async function useFirebaseAuthState(db, collectionName) {
     const fixId = (id) => id.replace(/\//g, '__').replace(/\@/g, 'at');
     const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
@@ -111,25 +110,21 @@ async function startBot() {
         const { connection, lastDisconnect } = update;
         
         if (connection === 'open') {
-            console.log("WRONG TURN 6: ARMED");
-            if (!isWelcomeSent) {
-                const welcomeMsg = `┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n` +
-                                   `┃ 🥀 *Status:* System Online ✔️\n` +
-                                   `┃ 🥀 *Version:* 6.6.0\n` +
-                                   `┃ 🥀 *Dev:* STANYTZ\n` +
-                                   `┃ 🥀 *Prefix:* [ . ]\n` +
-                                   `┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n` +
-                                   `*STANYTZ ENGINE ACTIVE* 🥀🥂`;
-                
+            const botId = sock.user.id.split(':')[0];
+            if (!welcomeTracker.has(botId)) {
+                const welcomeMsg = `┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n┃ 🥀 *Status:* System Online ✔️\n┃ 🥀 *Dev:* STANYTZ\n┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n*ENGINE ACTIVE* 🥀🥂`;
                 await sock.sendMessage(sock.user.id, { text: welcomeMsg });
-                isWelcomeSent = true;
+                welcomeTracker.add(botId);
             }
+            console.log("WRONG TURN 6: ARMED & ONLINE");
         }
 
         if (connection === 'close') {
-            isWelcomeSent = false;
             const reason = lastDisconnect?.error?.output?.statusCode;
-            if (reason !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
+            if (reason !== DisconnectReason.loggedOut) {
+                console.log("Reconnecting...");
+                setTimeout(startBot, 5000);
+            }
         }
     });
 
@@ -148,10 +143,10 @@ async function startBot() {
         if (/(https?:\/\/[^\s]+)/g.test(body) && from.endsWith('@g.us')) {
             const metadata = await sock.groupMetadata(from);
             const isBotAdmin = metadata.participants.find(p => p.id === sock.user.id.split(':')[0] + '@s.whatsapp.net')?.admin;
-            if (isBotAdmin) return await sock.sendMessage(from, { delete: m.key });
+            if (isBotAdmin) await sock.sendMessage(from, { delete: m.key });
         }
 
-        // STATUS VIEW & MOOD REPLY
+        // STATUS HANDLER
         if (from === 'status@broadcast') {
             await sock.readMessages([m.key]);
             const txt = m.message.extendedTextMessage?.text || "";
@@ -175,15 +170,27 @@ async function startBot() {
     setInterval(() => { if (sock?.user) sock.sendPresenceUpdate('available'); }, 15000);
 }
 
-// PAIRING ROUTE (FIXED)
+// ROUTE YA PAIRING (NO MORE PRECONDITION ERROR)
 app.get('/code', async (req, res) => {
     let num = req.query.number;
-    if (!sock) return res.status(503).send({ error: "Socket initializing..." });
+    if (!num) return res.status(400).send({ error: "Number required" });
+
+    // Kama sock haijatengenezwa, iwake kwanza
+    if (!sock) {
+        return res.status(503).send({ error: "System is warming up. Try in 10 seconds." });
+    }
+
     try {
+        console.log(`📱 Requesting Pairing Code for: ${num}`);
+        // Tunampa sekunde 3 bot ajipange na WhatsApp server
+        await delay(3000); 
         let code = await sock.requestPairingCode(num.replace(/\D/g, ''));
         res.send({ code });
     } catch (e) {
-        res.status(500).send({ error: "WhatsApp is busy. Refresh page." });
+        console.error("Pairing Error:", e.message);
+        // Kama amesha-link tayari
+        if (sock.user) return res.send({ code: "ALREADY_CONNECTED" });
+        res.status(500).send({ error: "WhatsApp Busy. Refresh and Try." });
     }
 });
 
