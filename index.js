@@ -7,9 +7,7 @@ const {
     fetchLatestBaileysVersion, 
     makeCacheableSignalKeyStore, 
     initAuthCreds,
-    BufferJSON,
-    prepareWAMessageMedia,
-    generateWAMessageFromContent
+    BufferJSON
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
 const { getFirestore, initializeFirestore, doc, getDoc, setDoc, deleteDoc, updateDoc, increment } = require('firebase/firestore');
@@ -19,6 +17,7 @@ const fs = require('fs-extra');
 const pino = require('pino');
 const axios = require('axios');
 
+// --- CONFIGURATION ---
 const firebaseConfig = {
     apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
     authDomain: "stanybots.firebaseapp.com",
@@ -28,32 +27,27 @@ const firebaseConfig = {
     appId: "1:381983533939:web:e6cc9445137c74b99df306"
 };
 
-// --- CONSTANTS ---
 const CHANNEL_JID = "120363404317544295@newsletter";
 const GROUP_JID = "120363406549688641@g.us";
-const CHANNEL_LINK = "https://whatsapp.com/channel/0029VaN608X90x2zS2lXpP3Y";
+const DEV_NAME = "ꜱᴛᴀɴʏᴛᴢ";
+const BOT_NAME = "ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼";
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true, useFetchStreams: false });
 
 const app = express();
 const commands = new Map();
-const msgStore = {}; // Memory for Anti-Delete
+const msgStore = {}; 
 let sock = null;
 
-// --- DYNAMIC AI ENGINE (Swahili & English) ---
-async function chatAI(text) {
-    try {
-        // Free AI API endpoint that handles multilingual conversations
-        const res = await axios.get(`https://api.simsimi.net/v2/?text=${encodeURIComponent(text)}&lc=sw`);
-        return res.data.success || null;
-    } catch (e) { return null; }
-}
+// --- 1. THE BRANDING & FORWARDING ENGINE ---
+async function sendBranded(jid, text, quoted = null) {
+    // Automatically appends Dev and Bot name to everything
+    const branding = `\n\n🥀 *ᴅᴇᴠ:* ${DEV_NAME}\n🛡️ *ʙᴏᴛ:* ${BOT_NAME}`;
+    const finalMsg = text + branding;
 
-// --- FORWARDED MESSAGE WRAPPER ---
-async function sendForwarded(jid, text, quoted = null) {
     return await sock.sendMessage(jid, {
-        text: text,
+        text: finalMsg,
         contextInfo: {
             forwardingScore: 999,
             isForwarded: true,
@@ -64,6 +58,14 @@ async function sendForwarded(jid, text, quoted = null) {
             }
         }
     }, { quoted });
+}
+
+// --- 2. AI AUTO-REPLY ENGINE (English & Swahili) ---
+async function getAIResponse(text) {
+    try {
+        const res = await axios.get(`https://api.simsimi.net/v2/?text=${encodeURIComponent(text)}&lc=sw`);
+        return res.data.success;
+    } catch (e) { return null; }
 }
 
 const loadCmds = () => {
@@ -111,7 +113,6 @@ async function startBot() {
         auth: state,
         logger: pino({ level: 'silent' }),
         browser: Browsers.macOS("Safari"),
-        syncFullHistory: false,
         getMessage: async (key) => msgStore[key.id]?.message || undefined
     });
 
@@ -121,14 +122,10 @@ async function startBot() {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
             console.log("✅ WRONG TURN 6: CONNECTED");
-            // Fancy Font Welcome (No Borders)
-            const fancyWelcome = `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 ᴀʀᴍᴇᴅ\n\nꜱʏꜱᴛᴇᴍ ɪꜱ ɴᴏᴡ ᴏɴʟɪɴᴇ ᴀɴᴅ ʟɪɴᴋᴇᴅ ᴛᴏ ᴄʜᴀɴɴᴇʟ\n\nᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ ɪɴᴅᴜꜱᴛʀɪᴇꜱ\nᴇɴɢɪɴᴇ: ᴠ6.6.0\nꜱᴛᴀᴛᴜꜱ: ᴘʀᴏᴛᴇᴄᴛᴇᴅ 🛡️`;
-            await sendForwarded(sock.user.id, fancyWelcome);
+            const welcome = `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 ᴀʀᴍᴇᴅ ᴀɴᴅ ʀᴇᴀᴅʏ\n\nꜱʏꜱᴛᴇᴍ ᴄᴏɴɴᴇᴄᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ.\nᴀʟʟ ᴀᴜᴛᴏ-ᴍᴏᴅᴇʀᴀᴛɪᴏɴ ᴀᴄᴛɪᴠᴇ.`;
+            await sendBranded(sock.user.id, welcome);
         }
-        if (connection === 'close') {
-            const reason = lastDisconnect?.error?.output?.statusCode;
-            if (reason !== DisconnectReason.loggedOut) startBot();
-        }
+        if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) startBot();
     });
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
@@ -139,89 +136,69 @@ async function startBot() {
         const body = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "").trim();
         const isGroup = from.endsWith('@g.us');
 
-        // Store message for Anti-Delete
         msgStore[m.key.id] = m;
 
-        // --- 1. AUTO STATUS ENGINE ---
+        // 1. AUTO STATUS (View, Like, AI Reply)
         if (from === 'status@broadcast') {
-            await sock.readMessages([m.key]); // Auto View
-            const emojis = ['🔥', '✨', '❤️', '🙌', '👑', '🥂'];
-            await sock.sendMessage(from, { react: { text: emojis[Math.floor(Math.random() * emojis.length)], key: m.key } }, { statusJidList: [sender] });
-            
-            // AI Deep Thought Comment on Status
-            const aiComment = await chatAI(`Comment on this status briefly: ${body || 'cool photo'}`);
-            if (aiComment) await sock.sendMessage(sender, { text: aiComment }, { quoted: m });
+            await sock.readMessages([m.key]);
+            await sock.sendMessage(from, { react: { text: '🔥', key: m.key } }, { statusJidList: [sender] });
+            const aiComm = await getAIResponse(`Comment on this status: ${body}`);
+            if (aiComm) await sock.sendMessage(sender, { text: aiComm }, { quoted: m });
             return;
         }
 
-        // --- 2. MEMBERSHIP ENFORCEMENT ---
-        if (body.startsWith('.')) {
-            try {
-                const groupMeta = await sock.groupMetadata(GROUP_JID);
-                const isMember = groupMeta.participants.some(p => p.id === sender);
-                if (!isMember) return sendForwarded(from, `⚠️ *ACCESS DENIED*\n\nYou must join our official group and channel to use this bot.\n\nGroup: ${GROUP_JID}\nChannel: ${CHANNEL_LINK}`);
-            } catch (e) {}
-        }
-
-        // --- 3. ANTI-DELETE & ANTI-VIEWONCE ---
-        if (m.message.viewOnceMessageV2 || m.message.viewOnceMessage) {
-            await sendForwarded(sock.user.id, `🛡️ *Anti-ViewOnce Captured* from @${sender.split('@')[0]}`);
+        // 2. ANTI-DELETE & VIEWONCE
+        if (m.message.viewOnceMessageV2) {
+            await sendBranded(sock.user.id, `🛡️ *ᴀɴᴛɪ-ᴠɪᴇᴡᴏɴᴄᴇ ᴅᴇᴛᴇᴄᴛᴇᴅ* ꜰʀᴏᴍ @${sender.split('@')[0]}`);
             await sock.copyNForward(sock.user.id, m, false);
         }
 
-        if (m.message.protocolMessage?.type === 0) { // Delete detected
-            const deletedMsg = msgStore[m.message.protocolMessage.key.id];
-            if (deletedMsg) {
-                await sendForwarded(from, `🛡️ *Anti-Delete Detected*`);
-                await sock.copyNForward(from, deletedMsg, false);
+        if (m.message.protocolMessage?.type === 0) {
+            const deleted = msgStore[m.message.protocolMessage.key.id];
+            if (deleted) {
+                await sendBranded(from, `🛡️ *ᴀɴᴛɪ-ᴅᴇʟᴇᴛᴇ ᴀᴄᴛɪᴠᴇ*`);
+                await sock.copyNForward(from, deleted, false);
             }
         }
 
-        // --- 4. ANTI-PORN / ANTI-LINK / ANTI-SCAM ---
-        const scamKeywords = ['fixed match', 'bundle', 'investment', 'free data', 'login to get'];
-        const isScam = scamKeywords.some(word => body.toLowerCase().includes(word));
-        if ((isScam || body.match(/chat.whatsapp.com/gi)) && isGroup) {
-            await sock.sendMessage(from, { delete: m.key });
-            // Optional: await sock.groupParticipantsUpdate(from, [sender], 'remove');
-            return;
-        }
-
-        // --- 5. AUTO TYPING & AI AUTO-REPLY ---
+        // 3. AUTO TYPING & AI REPLY
         await sock.sendPresenceUpdate('composing', from);
-        
+
         if (body.startsWith('.')) {
+            // Enforcement Check
+            const groupMetadata = await sock.groupMetadata(GROUP_JID).catch(() => null);
+            const isMember = groupMetadata?.participants.some(p => p.id === sender);
+            if (!isMember) return sendBranded(from, `❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ ᴏᴜʀ ɢʀᴏᴜᴘ/ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜꜱᴇ ʙᴏᴛ.`);
+
             const args = body.slice(1).trim().split(/ +/);
             const cmdName = args.shift().toLowerCase();
             const cmd = commands.get(cmdName);
-            if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), args);
-        } else {
-            // Automatic AI Reply (English/Swahili)
-            if (body.length > 2 && !isGroup) {
-                const aiResponse = await chatAI(body);
-                if (aiResponse) {
-                    await delay(1500);
-                    await sendForwarded(from, aiResponse, m);
-                }
+            
+            if (cmd) {
+                // We wrap the original execute but intercept the reply to add branding
+                const originalReply = m.reply;
+                m.reply = (text) => sendBranded(from, text, m); 
+                await cmd.execute(m, sock, Array.from(commands.values()), args);
             }
-        }
-
-        // Tracking Activity
-        if (isGroup) {
-            await setDoc(doc(db, "ACTIVITY", `${from}_${sender}`), { count: increment(1), lastSeen: Date.now() }, { merge: true });
+        } else if (!isGroup && body.length > 2) {
+            // AUTO AI REPLY (No command needed)
+            const aiRes = await getAIResponse(body);
+            if (aiRes) {
+                await delay(1500);
+                await sendBranded(from, aiRes, m);
+            }
         }
     });
 
-    // --- 6. WELCOME & GOODBYE ---
+    // 4. WELCOME & GOODBYE
     sock.ev.on('group-participants.update', async (anu) => {
         const { id, participants, action } = anu;
-        const meta = await sock.groupMetadata(id);
         for (let jid of participants) {
             const pp = await sock.profilePictureUrl(jid, 'image').catch(() => 'https://i.ibb.co/Ds0pP9Y/avatar.png');
             if (action === 'add') {
-                const welcomeQuote = `✨ "Success is not final; failure is not fatal: It is the courage to continue that counts."`;
-                await sock.sendMessage(id, { image: { url: pp }, caption: `Welcome @${jid.split('@')[0]} to *${meta.subject}*\n\n${welcomeQuote}\n\n*Desc:* ${meta.desc || 'No Description'}`, mentions: [jid] });
+                await sock.sendMessage(id, { image: { url: pp }, caption: `ᴡᴇʟᴄᴏᴍᴇ @${jid.split('@')[0]}\n\nᴇɴᴊᴏʏ ʏᴏᴜʀ ꜱᴛᴀʏ ɪɴ ᴏᴜʀ ɢʀᴏᴜᴘ!`, mentions: [jid] });
             } else if (action === 'remove') {
-                await sendForwarded(id, `👋 Goodbye @${jid.split('@')[0]}. We hope you find what you were looking for.`);
+                await sendBranded(id, `ɢᴏᴏᴅʙʏᴇ @${jid.split('@')[0]}`);
             }
         }
     });
@@ -229,7 +206,7 @@ async function startBot() {
     sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
 }
 
-// --- PAIRING ROUTE ---
+// 5. PAIRING
 app.get('/code', async (req, res) => {
     let num = req.query.number;
     if (!num) return res.status(400).send({ error: "Missing Number" });
@@ -240,7 +217,7 @@ app.get('/code', async (req, res) => {
         await delay(5000); 
         let code = await sock.requestPairingCode(num.replace(/\D/g, ''));
         res.send({ code });
-    } catch (e) { res.status(500).send({ error: "Refresh and try again." }); }
+    } catch (e) { res.status(500).send({ error: "Precondition Failed" }); }
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
