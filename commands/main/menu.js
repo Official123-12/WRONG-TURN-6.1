@@ -1,55 +1,44 @@
 module.exports = {
     name: 'menu',
-    async execute(m, sock, commands, args) {
+    async execute(m, sock, commands, args, db, forwardedContext) {
         const from = m.key.remoteJid;
-        const pushName = m.pushName || "User";
+        const uptime = Math.floor(process.uptime() / 3600) + "h " + Math.floor((process.uptime() % 3600) / 60) + "m";
+
+        let menu = `*W R O N G  T U R N  B O T*  ✔️\n`;
+        menu += `_S y s t e m   O p e r a t i o n a l_\n\n`;
         
-        // Runtime
-        const uptime = process.uptime();
-        const hours = Math.floor(uptime / 3600);
-        const minutes = Math.floor((uptime % 3600) / 60);
-        
-        const categories = {};
-        commands.forEach(cmd => {
-            if (cmd.category) {
-                const cat = cmd.category.toUpperCase();
-                if (!categories[cat]) categories[cat] = [];
-                categories[cat].push(cmd.name);
-            }
+        menu += `⚘  *U S E R* : ${m.pushName}\n`;
+        menu += `⚘  *U P T I M E* : ${uptime}\n`;
+        menu += `⚘  *C H A N N E L* : Verified\n\n`;
+
+        const cats = {};
+        commands.forEach(c => {
+            if (!cats[c.category]) cats[c.category] = [];
+            cats[c.category].push(c.name);
         });
 
-        let menuBody = `*W R O N G  T U R N  6*  ✔️\n`;
-        menuBody += `_S y s t e m   A r m e d_\n\n`;
-
-        menuBody += `🥀  *U S E R* : ${pushName}\n`;
-        menuBody += `🥀  *U P T I M E* : ${hours}h ${minutes}m\n`;
-        menuBody += `🥀  *E N G I N E* : AngularSockets\n\n`;
-
-        for (const [category, cmds] of Object.entries(categories)) {
-            menuBody += `⚚  *${category}*\n`;
-            menuBody += `───────────────\n`;
+        for (const [category, cmds] of Object.entries(cats)) {
+            menu += `🥀  *${category.toUpperCase()}*\n`;
+            menu += `───────────────\n`;
             cmds.sort().forEach(name => {
-                menuBody += `   ◦  .${name}\n`;
+                menu += `   ◦  .${name}\n`;
             });
-            menuBody += `\n`;
+            menu += `\n`;
         }
 
-        menuBody += `*𓆩  STANYTZ INDUSTRIES  𓆪*`;
+        menu += `*𓆩  STANYTZ INDUSTRIES  𓆪*`;
 
-        await sock.sendMessage(from, {
-            text: menuBody,
+        await sock.sendMessage(from, { 
+            text: menu, 
             contextInfo: {
+                ...forwardedContext,
                 externalAdReply: {
-                    title: "W R O N G  T U R N  6  ✔️",
-                    body: "SYSTEM OPERATIONAL",
+                    title: "WRONG TURN MAINFRRAME",
+                    body: "STANYTZ MASTER ENGINE",
                     mediaType: 1,
                     renderLargerThumbnail: true,
-                    thumbnailUrl: "https://files.catbox.moe/59ays3.jpg",
-                    sourceUrl: "https://github.com/stanytz",
-                    showAdAttribution: true
-                },
-                forwardingScore: 999,
-                isForwarded: true
+                    thumbnailUrl: "https://files.catbox.moe/59ays3.jpg"
+                }
             }
         }, { quoted: m });
     }
