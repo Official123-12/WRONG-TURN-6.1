@@ -1,25 +1,20 @@
 module.exports = {
     name: 'owner',
-    async execute(m, sock) {
+    async execute(m, sock, commands, args, db, forwardedContext) {
         const from = m.key.remoteJid;
         
-        // Verified VCard
-        const vcard = 'BEGIN:VCARD\n' +
-                      'VERSION:3.0\n' +
-                      'FN:STANYTZ ✔️\n' +
-                      'ORG:WRONG TURN 6;\n' +
-                      'TEL;type=CELL;type=VOICE;waid=255712345678:255712345678\n' + 
-                      'END:VCARD';
+        let msg = `╭─── • 🥀 • ───╮\n`;
+        msg += `   ꜱʏꜱᴛᴇᴍ  ᴏᴡɴᴇʀ  \n`;
+        msg += `╰─── • 🥀 • ───╯\n\n`;
+        msg += `⚘  *ɴᴀᴍᴇ* : ꜱᴛᴀɴʏᴛᴢ\n`;
+        msg += `⚘  *ʀᴏʟᴇ* : ᴄᴏʀᴇ ᴅᴇᴠᴇʟᴏᴘᴇʀ\n`;
+        msg += `⚘  *ᴄᴏɴᴛᴀᴄᴛ* : 𝟶𝟼𝟷𝟾𝟼𝟼𝟾𝟻𝟶𝟸🇹🇿\n`;
+        msg += `⚘  *ɢɪᴛʜᴜʙ* : ꜱᴛᴀɴʏᴛᴢ-ᴅᴇᴠ\n\n`;
+        msg += `_ʀᴇᴀᴄʜ ᴏᴜᴛ ꜰᴏʀ ꜱʏꜱᴛᴇᴍ ᴜᴘᴅᴀᴛᴇꜱ_`;
 
         await sock.sendMessage(from, { 
-            contacts: { 
-                displayName: 'STANYTZ', 
-                contacts: [{ vcard }] 
-            } 
-        });
-
-        const msg = `WRONG TURN 6 ✔️\nDeveloper: STANYTZ\nRole: Lead Architect\nGitHub: github.com/stanytz`;
-        
-        await sock.sendMessage(from, { text: msg }, { quoted: m });
+            text: msg, 
+            contextInfo: forwardedContext 
+        }, { quoted: m });
     }
 };
