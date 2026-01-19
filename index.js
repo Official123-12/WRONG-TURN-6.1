@@ -48,7 +48,7 @@ const forwardedContext = {
 };
 
 /**
- * MOOD ANALYSIS FOR STATUS
+ * MOOD ANALYSIS LOGIC
  */
 const getMoodReply = (text) => {
     const t = text.toLowerCase();
@@ -76,9 +76,6 @@ const loadCmds = () => {
     });
 };
 
-/**
- * MAIN BOT ENGINE
- */
 async function startBot() {
     loadCmds();
     const { useFirebaseAuthState } = require('./lib/firestoreAuth');
@@ -89,8 +86,7 @@ async function startBot() {
         logger: pino({ level: 'silent' }),
         browser: Browsers.macOS("Safari"),
         markOnlineOnConnect: true,
-        generateHighQualityLinkPreview: true,
-        connectTimeoutMs: 60000
+        generateHighQualityLinkPreview: true
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -98,37 +94,21 @@ async function startBot() {
     sock.ev.on('connection.update', async (u) => {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
-            console.log("✅ WRONG TURN BOT: ARMED & READY");
-            await sock.sendMessage(sock.user.id, { 
-                text: "ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ\nᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ\nꜱᴛᴀᴛᴜꜱ: ᴄᴏɴɴᴇᴄᴛᴇᴅ ✔️",
-                contextInfo: forwardedContext
-            });
+            console.log("✅ WRONG TURN BOT: ARMED");
+            const welcomeMsg = `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ\nᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ\nꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ`;
+            await sock.sendMessage(sock.user.id, { text: welcomeMsg, contextInfo: forwardedContext });
         }
         if (connection === 'close') {
-            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
+            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) startBot();
         }
     });
 
-    // 2. GROUP EVENTS (WELCOME/GOODBYE)
-    sock.ev.on('group-participants.update', async (anu) => {
-        const { id, participants, action } = anu;
-        const metadata = await sock.groupMetadata(id);
-        for (let num of participants) {
-            const groupLogo = await sock.profilePictureUrl(id, 'image').catch(() => 'https://files.catbox.moe/59ays3.jpg');
-            if (action === 'add') {
-                const welcome = `*ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ* ${metadata.subject}\n\nᴜꜱᴇʀ: @${num.split('@')[0]}\n\n"ᴋɴᴏᴡʟᴇᴅɢᴇ ɪꜱ ᴛʜᴇ ᴏɴʟʏ ᴡᴀʏ ᴏᴜᴛ."\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`;
-                await sock.sendMessage(id, { image: { url: groupLogo }, caption: welcome, mentions: [num], contextInfo: forwardedContext });
-            }
-        }
-    });
-
-    // 3. MESSAGE PROCESSING (AUTOMATIONS)
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
         if (!m.message) return;
         const from = m.key.remoteJid;
         const sender = m.key.participant || from;
-        const body = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || m.message.videoMessage?.caption || "").trim();
+        const body = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "").trim();
         const type = getContentType(m.message);
 
         msgCache.set(m.key.id, m);
@@ -140,11 +120,29 @@ async function startBot() {
         const ownerId = sock.user.id.split(':')[0];
         const isOwner = sender.startsWith(ownerId) || m.key.fromMe;
 
-        // A. AUTO PRESENCE
+        // --- INJECTED: REPLY-TO-NUMBER LISTENER ---
+        const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        const quotedText = quoted?.conversation || quoted?.extendedTextMessage?.text || "";
+
+        if (quoted && !isNaN(body) && body.length > 0) {
+            const choice = body.trim();
+            if (quotedText.includes("ᴀᴠɪᴀᴛᴏʀ ᴍᴀɪɴꜰʀᴀᴍᴇ")) {
+                const cmd = commands.get("aviator");
+                if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), [choice], db, forwardedContext);
+            } else if (quotedText.includes("ᴍɪɴᴇꜱ ᴀɴᴀʟyᴢᴇʀ")) {
+                const cmd = commands.get("mines");
+                if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), [choice], db, forwardedContext);
+            } else if (quotedText.includes("ꜱʟᴏᴛꜱ ᴍᴀɪɴꜰʀᴀᴍᴇ")) {
+                const cmd = commands.get("slots");
+                if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), [choice], db, forwardedContext);
+            }
+        }
+
+        // AUTO PRESENCE
         if (s.autoType) await sock.sendPresenceUpdate('composing', from);
         if (s.autoRecord && Math.random() > 0.5) await sock.sendPresenceUpdate('recording', from);
 
-        // B. FORCE JOIN (Link: https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y)
+        // FORCE JOIN (Link: https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y)
         if (body.startsWith(s.prefix) && !isOwner && s.forceJoin) {
             try {
                 const groupMetadata = await sock.groupMetadata('120363406549688641@g.us');
@@ -155,7 +153,7 @@ async function startBot() {
             } catch (e) {}
         }
 
-        // C. ANTI-DELETE & ANTI-VIEWONCE (Auto Forward to Owner)
+        // ANTI-DELETE & ANTI-VIEWONCE
         if (m.message.protocolMessage?.type === 0 && s.antiDelete) {
             const cached = msgCache.get(m.message.protocolMessage.key.id);
             if (cached) {
@@ -168,17 +166,7 @@ async function startBot() {
             await sock.copyNForward(sock.user.id, m, false, { contextInfo: forwardedContext });
         }
 
-        // D. ANTI-LINK / PORN / SCAM / MEDIA (GROUP PROTECT)
-        if (from.endsWith('@g.us') && !isOwner) {
-            const isPorn = /(porn|xxx|nude|sex|vixen|ngono)/gi.test(body);
-            const isScam = /(bundle|fixed match|earn money|invest|wa.me\/settings)/gi.test(body);
-            const isMedia = (type === 'audioMessage' || type === 'imageMessage' || type === 'videoMessage');
-            if (isPorn || isScam || body.includes('http') || (s.antiMedia && isMedia)) {
-                await sock.sendMessage(from, { delete: m.key });
-            }
-        }
-
-        // E. AUTO STATUS ENGINE
+        // AUTO STATUS ENGINE
         if (from === 'status@broadcast' && s.autoStatus) {
             await sock.readMessages([m.key]);
             const mood = getMoodReply(body);
@@ -186,15 +174,16 @@ async function startBot() {
             await sock.sendMessage(from, { react: { text: '🥀', key: m.key } }, { statusJidList: [sender] });
         }
 
-        // F. UNIVERSAL AUTO AI CHAT (Global Natural Response)
+        // AUTO AI CHAT
         if (!body.startsWith(s.prefix) && !m.key.fromMe && s.autoAI && body.length > 2 && !from.endsWith('@g.us')) {
             try {
-                const aiRes = await axios.get(`https://text.pollinations.ai/Reply%20naturally%20and%20briefly%20in%20its%20own%20language:%20${encodeURIComponent(body)}`);
+                const aiPrompt = `You are WRONG TURN 6 AI by STANYTZ. Respond naturally to this in its own language: ${body}`;
+                const aiRes = await axios.get(`https://text.pollinations.ai/Reply%20naturally%20and%20briefly%20in%20its%20own%20language:%20/${encodeURIComponent(aiPrompt)}`);
                 await sock.sendMessage(from, { text: `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n${aiRes.data}\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`, contextInfo: forwardedContext }, { quoted: m });
             } catch (e) {}
         }
 
-        // G. COMMAND EXECUTION
+        // COMMAND EXECUTION
         if (body.startsWith(s.prefix)) {
             const args = body.slice(s.prefix.length).trim().split(/ +/);
             const cmdName = args.shift().toLowerCase();
@@ -204,20 +193,16 @@ async function startBot() {
     });
 
     sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
-
-    // 4. ALWAYS ONLINE & AUTO BIO
     setInterval(async () => {
         if (sock?.user) {
             await sock.sendPresenceUpdate('available');
             const uptime = `${Math.floor(process.uptime() / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`;
-            await sock.updateProfileStatus(`WRONG TURN 6 | Status: Online | Uptime: ${uptime}`).catch(() => {});
+            await sock.updateProfileStatus(`WRONG TURN 6 | ONLINE | UPTIME: ${uptime}`).catch(() => {});
         }
     }, 30000);
 }
 
-/**
- * PAIRING API (ZERO 428 ERROR)
- */
+// PAIRING API
 app.get('/code', async (req, res) => {
     let num = req.query.number;
     if (!num) return res.status(400).send({ error: "Missing Number" });
