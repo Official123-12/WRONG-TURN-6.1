@@ -1,12 +1,28 @@
 const axios = require('axios');
 module.exports = {
-    name: 'dnslookup',
+    name: 'iplookup',
     async execute(m, sock, commands, args, db, forwardedContext) {
-        if (!args[0]) return m.reply("ᴘʀᴏᴠɪᴅᴇ ᴀ ᴅᴏᴍᴀɪɴ.");
+        const from = m.key.remoteJid;
+        if (!args[0]) return sock.sendMessage(from, { text: "ᴘʟᴇᴀꜱᴇ ᴘʀᴏᴠɪᴅᴇ ᴀɴ ɪᴘ ᴀᴅᴅʀᴇꜱꜱ." });
+
         try {
-            const res = await axios.get(`https://api.hackertarget.com/dnslookup/?q=${args[0]}`);
-            let resMsg = `╭── • 🥀 • ──╮\n  ᴅ ɴ ꜱ  ʀ ᴇ ᴄ ᴏ ʀ ᴅ ꜱ \n╰── • 🥀 • ──╯\n\n${res.data}\n\n_ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ_`;
-            await sock.sendMessage(m.key.remoteJid, { text: resMsg, contextInfo: forwardedContext });
-        } catch (e) { m.reply("ᴅɴꜱ ʟᴏᴏᴋᴜᴘ ꜰᴀɪʟᴇᴅ."); }
+            const res = await axios.get(`http://ip-api.com/json/${args[0]}?fields=66846719`);
+            const d = res.data;
+            if (d.status !== 'success') return m.reply("ɪɴᴠᴀʟɪᴅ ɪᴘ ᴛᴀʀɢᴇᴛ.");
+
+            let resMsg = `╭─── • 🥀 • ───╮\n`;
+            resMsg += `  ɪ ᴘ  ᴛ ᴀ ʀ ɢ ᴇ ᴛ  \n`;
+            resMsg += `╰─── • 🥀 • ───╯\n\n`;
+            resMsg += `│ ◦ ɪᴘ: ${d.query}\n`;
+            resMsg += `│ ◦ ɪꜱᴘ: ${d.isp}\n`;
+            resMsg += `│ ◦ ᴄɪᴛʏ: ${d.city}\n`;
+            resMsg += `│ ◦ ʀᴇɢɪᴏɴ: ${d.regionName}\n`;
+            resMsg += `│ ◦ ᴛɪᴍᴇᴢᴏɴᴇ: ${d.timezone}\n`;
+            resMsg += `│ ◦ ᴄᴏᴏʀᴅꜱ: ${d.lat}, ${d.lon}\n`;
+            resMsg += `└──────────────\n\n`;
+            resMsg += `_ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ_`;
+
+            await sock.sendMessage(from, { text: resMsg, contextInfo: forwardedContext }, { quoted: m });
+        } catch (e) { m.reply("ʟᴏᴏᴋᴜᴘ ꜰᴀɪʟᴇᴅ."); }
     }
 };
