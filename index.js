@@ -1,16 +1,7 @@
 require('dotenv').config();
-const { 
-    default: makeWASocket, 
-    DisconnectReason, 
-    Browsers, 
-    delay, 
-    fetchLatestBaileysVersion, 
-    makeCacheableSignalKeyStore, 
-    initAuthCreds,
-    BufferJSON
-} = require('@whiskeysockets/baileys');
+const { default: makeWASocket, DisconnectReason, Browsers, delay, fetchLatestBaileysVersion, BufferJSON, initAuthCreds, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, initializeFirestore, doc, getDoc, setDoc, deleteDoc } = require('firebase/firestore');
+const { getFirestore, initializeFirestore, doc, getDoc, setDoc, collection, updateDoc } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
@@ -30,9 +21,21 @@ const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true
 
 const app = express();
 const commands = new Map();
+const msgCache = new Map();
 let sock = null;
+let isWelcomeSent = false;
 
-// 1. DYNAMIC COMMAND LOADER
+// ELITE FORWARDED CONTEXT
+const forwardedContext = {
+    isForwarded: true,
+    forwardingScore: 999,
+    forwardedNewsletterMessageInfo: {
+        newsletterJid: '120363404317544295@newsletter',
+        serverMessageId: 1,
+        newsletterName: 'W R O N G  T U R N  B O T  ✔️'
+    }
+};
+
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
@@ -40,74 +43,27 @@ const loadCmds = () => {
         const folderPath = path.join(cmdPath, folder);
         if (fs.lstatSync(folderPath).isDirectory()) {
             fs.readdirSync(folderPath).filter(f => f.endsWith('.js')).forEach(file => {
-                try {
-                    const cmd = require(path.join(folderPath, file));
-                    if (cmd && cmd.name) {
-                        cmd.category = folder;
-                        commands.set(cmd.name.toLowerCase(), cmd);
-                    }
-                } catch (e) {}
+                const cmd = require(path.join(folderPath, file));
+                if (cmd && cmd.name) {
+                    cmd.category = folder;
+                    commands.set(cmd.name.toLowerCase(), cmd);
+                }
             });
         }
     });
 };
 
-// 2. FIREBASE AUTH HANDLER
-async function useFirebaseAuthState(db, collectionName, sessionId) {
-    const fixId = (id) => `${sessionId}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`;
-    const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
-    const readData = async (id) => {
-        try {
-            const snapshot = await getDoc(doc(db, collectionName, fixId(id)));
-            return snapshot.exists() ? JSON.parse(JSON.stringify(snapshot.data()), BufferJSON.reviver) : null;
-        } catch (e) { return null; }
-    };
-    const removeData = async (id) => deleteDoc(doc(db, collectionName, fixId(id)));
-
-    let creds = await readData('creds') || initAuthCreds();
-
-    return {
-        state: {
-            creds,
-            keys: {
-                get: async (type, ids) => {
-                    const data = {};
-                    await Promise.all(ids.map(async id => {
-                        let value = await readData(`${type}-${id}`);
-                        if (type === 'app-state-sync-key' && value) value = require('@whiskeysockets/baileys').proto.Message.AppStateSyncKeyData.fromObject(value);
-                        data[id] = value;
-                    }));
-                    return data;
-                },
-                set: async (data) => {
-                    for (const type in data) {
-                        for (const id in data[type]) {
-                            const value = data[type][id];
-                            value ? await writeData(value, `${type}-${id}`) : await removeData(`${type}-${id}`);
-                        }
-                    }
-                }
-            }
-        },
-        saveCreds: () => writeData(creds, 'creds'),
-        clearSession: () => removeData('creds')
-    };
-}
-
-// 3. MAIN BOT ENGINE
 async function startBot() {
     loadCmds();
+    const { useFirebaseAuthState } = require('./lib/firestoreAuth');
     const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
-    
+
     sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS("Safari"), // User Preferred
-        printQRInTerminal: false,
+        browser: Browsers.macOS("Safari"),
         markOnlineOnConnect: true,
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 0,
-        keepAliveIntervalMs: 10000
+        generateHighQualityLinkPreview: true
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -115,73 +71,99 @@ async function startBot() {
     sock.ev.on('connection.update', async (u) => {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
-            console.log("✅ WRONG TURN 6: CONNECTED");
-            const welcome = `┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n┃\n┃ 🥀 *SYSTEM ARMED & ACTIVE*\n┃\n┣━━━━━━━━━━━━━━━━━━━━━━━┓\n┃ 🛡️ *DEV    :* STANYTZ\n┃ ⚙️ *VERSION:* 6.6.0\n┃ 🌐 *ENGINE :* AngularSockets\n┃ 🌷 *PREFIX :* [ . ]\n┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n🥀🥂 *STANYTZ INDUSTRIES*`;
-            await sock.sendMessage(sock.user.id, { text: welcome });
+            if (!isWelcomeSent) {
+                await sock.sendMessage(sock.user.id, { 
+                    text: `W R O N G  T U R N  B O T  ✔️\n\n_System Armed & Operational_\n_Developer: STANYTZ_`,
+                    contextInfo: forwardedContext
+                });
+                isWelcomeSent = true;
+            }
         }
-        if (connection === 'close') {
-            const reason = lastDisconnect?.error?.output?.statusCode;
-            if (reason !== DisconnectReason.loggedOut) startBot();
-        }
+        if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) startBot();
     });
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
-        if (!m.message || m.key.fromMe) return;
+        if (!m.message) return;
         const from = m.key.remoteJid;
-        const body = (m.message.conversation || m.message.extendedTextMessage?.text || "").trim();
+        const sender = m.key.participant || from;
+        const body = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "").trim();
 
-        // Auto Typing
-        await sock.sendPresenceUpdate('composing', from);
+        // 1. SETTINGS FETCH
+        const setSnap = await getDoc(doc(db, "SETTINGS", "GLOBAL"));
+        const s = setSnap.exists() ? setSnap.data() : { autoType: true, autoRecord: true, antiDelete: true, antiViewOnce: true, forceJoin: true, autoAI: true };
 
+        // 2. FORCE JOIN CHECK
+        if (body.startsWith('.') && !m.key.fromMe && s.forceJoin) {
+            try {
+                const groupMetadata = await sock.groupMetadata('120363406549688641@g.us');
+                if (!groupMetadata.participants.find(p => p.id === sender)) {
+                    return sock.sendMessage(from, { text: `❌ *ACCESS DENIED*\n\nYou must join the Official Group and follow the Channel to use this bot.\n\nGroup: https://chat.whatsapp.com/invite_link\n\n_Join and try again!_` }, { quoted: m });
+                }
+            } catch (e) {}
+        }
+
+        // 3. AUTO PRESENCE
+        if (s.autoType) await sock.sendPresenceUpdate('composing', from);
+        if (s.autoRecord) await sock.sendPresenceUpdate('recording', from);
+
+        // 4. ANTI-DELETE & ANTI-VIEWONCE
+        msgCache.set(m.key.id, m);
+        if (m.message.protocolMessage?.type === 0 && s.antiDelete) {
+            const cached = msgCache.get(m.message.protocolMessage.key.id);
+            if (cached) await sock.copyNForward(sock.user.id, cached, false, { contextInfo: forwardedContext });
+        }
+        const msgType = Object.keys(m.message)[0];
+        if ((msgType === 'viewOnceMessage' || msgType === 'viewOnceMessageV2') && s.antiViewOnce) {
+            await sock.copyNForward(sock.user.id, m, false, { contextInfo: forwardedContext });
+        }
+
+        // 5. AUTO AI CHAT (Global)
+        if (!from.endsWith('@g.us') && !body.startsWith('.') && !m.key.fromMe && s.autoAI) {
+            const axios = require('axios');
+            const aiRes = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(body)}`);
+            await sock.sendMessage(from, { text: aiRes.data, contextInfo: forwardedContext });
+        }
+
+        // 6. ANTI-PORN / ANTI-SCAM / ANTI-LINK (GROUPS)
+        if (from.endsWith('@g.us') && !m.key.fromMe) {
+            const groupSnap = await getDoc(doc(db, "GROUPS", from));
+            const g = groupSnap.exists() ? groupSnap.data() : { antiLink: true, antiPorn: true, antiScam: true };
+            
+            const isScam = /(bundle|fixed match|earn money|invest|free data)/gi.test(body);
+            const isPorn = /(porn|xxx|nude|sex|vixen)/gi.test(body);
+            
+            if ((isScam && g.antiScam) || (isPorn && g.antiPorn) || (body.includes('http') && g.antiLink)) {
+                await sock.sendMessage(from, { delete: m.key });
+                // await sock.groupParticipantsUpdate(from, [sender], "remove"); // Uncomment to enable auto-remove
+            }
+        }
+
+        // 7. STATUS ENGINE
+        if (from === 'status@broadcast') {
+            await sock.readMessages([m.key]);
+            if (s.autoStatusLike) await sock.sendMessage(from, { react: { text: '🥀', key: m.key } }, { statusJidList: [sender] });
+        }
+
+        // 8. COMMANDS
         if (body.startsWith('.')) {
             const args = body.slice(1).trim().split(/ +/);
             const cmdName = args.shift().toLowerCase();
             const cmd = commands.get(cmdName);
-            if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), args);
+            if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), args, db, forwardedContext);
         }
     });
-
-    sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
 }
 
-// 4. THE ULTIMATE PAIRING ROUTE (FIXED INFINITE LOADING)
+// STABLE PAIRING
 app.get('/code', async (req, res) => {
     let num = req.query.number;
-    if (!num) return res.status(400).send({ error: "Missing Number" });
-
-    try {
-        // Step 1: Wipe old creds to ensure 100% clean handshake
-        const auth = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
-        await auth.clearSession();
-
-        // Step 2: Initialize ONE socket and keep it alive
-        sock = makeWASocket({
-            auth: auth.state,
-            logger: pino({ level: 'silent' }),
-            browser: Browsers.macOS("Safari")
-        });
-
-        // Step 3: Wait for socket stabilization
-        await delay(5000); 
-
-        // Step 4: Request Code
-        let code = await sock.requestPairingCode(num.replace(/\D/g, ''));
-        console.log(`✅ Code for ${num}: ${code}`);
-        res.send({ code });
-
-        // Step 5: Important listeners to capture the link
-        sock.ev.on('creds.update', auth.saveCreds);
-        sock.ev.on('connection.update', (u) => {
-            if (u.connection === 'open') console.log("Link Confirmed!");
-        });
-
-    } catch (e) {
-        console.error(e);
-        res.status(500).send({ error: "Precondition Failed. Refresh and try again." });
-    }
+    const pSock = makeWASocket({ auth: { creds: initAuthCreds(), keys: makeCacheableSignalKeyStore({}, pino({level:'silent'})) }, logger: pino({level:'silent'}), browser: Browsers.macOS("Safari") });
+    await delay(3000);
+    let code = await pSock.requestPairingCode(num.replace(/\D/g, ''));
+    res.send({ code });
+    pSock.ev.on('creds.update', async (creds) => { await setDoc(doc(db, "WT6_SESSIONS", "MASTER_creds"), JSON.parse(JSON.stringify(creds, BufferJSON.replacer))); });
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => { console.log(`Server Online: ${PORT}`); startBot(); });
+app.listen(process.env.PORT || 3000, startBot);
