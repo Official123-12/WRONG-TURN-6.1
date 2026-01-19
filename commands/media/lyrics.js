@@ -1,16 +1,13 @@
 const axios = require('axios');
 module.exports = {
     name: 'lyrics',
-    async execute(m, sock, commands, args) {
-        const from = m.key.remoteJid;
+    async execute(m, sock, commands, args, db, forwardedContext) {
         const query = args.join(" ");
-        if (!query) return sock.sendMessage(from, { text: "Provide a song name." }, { quoted: m });
+        if (!query) return m.reply("ᴘʀᴏᴠɪᴅᴇ ᴀ ꜱᴏɴɢ ɴᴀᴍᴇ.");
         try {
             const res = await axios.get(`https://api.popcat.xyz/lyrics?song=${encodeURIComponent(query)}`);
-            const msg = `Title: ${res.data.title}\nArtist: ${res.data.artist}\n\n${res.data.lyrics}\n\nWRONG TURN 6 ✔️\nDeveloper: STANYTZ`;
-            await sock.sendMessage(from, { text: msg }, { quoted: m });
-        } catch (e) {
-            await sock.sendMessage(from, { text: "Lyrics not found." }, { quoted: m });
-        }
+            let resMsg = `╭─── • 🥀 • ───╮\n  ʟ ʏ ʀ ɪ ᴄ ꜱ  \n╰─── • 🥀 • ───╯\n\n${res.data.lyrics}\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`;
+            await sock.sendMessage(m.key.remoteJid, { text: resMsg, contextInfo: forwardedContext });
+        } catch (e) { m.reply("ʟʏʀɪᴄꜱ ɴᴏᴛ ꜰᴏᴜɴᴅ."); }
     }
 };
