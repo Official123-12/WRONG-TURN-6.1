@@ -4,10 +4,10 @@ module.exports = {
     name: 'toggle',
     async execute(m, sock, commands, args, db, forwardedContext) {
         const ownerId = sock.user.id.split(':')[0];
-        if (!m.sender.startsWith(ownerId)) return;
+        if (!m.key.fromMe && !m.sender.startsWith(ownerId)) return;
 
         const feature = args[0]?.toLowerCase();
-        if (!feature) return sock.sendMessage(m.key.remoteJid, { text: "Usage: .toggle [feature]" });
+        if (!feature) return sock.sendMessage(m.key.remoteJid, { text: "Provide a feature name to toggle." });
 
         const settingsRef = doc(db, "SETTINGS", "GLOBAL");
         const snap = await getDoc(settingsRef);
@@ -15,9 +15,14 @@ module.exports = {
 
         await setDoc(settingsRef, { [feature]: !current }, { merge: true });
 
-        await sock.sendMessage(m.key.remoteJid, { 
-            text: `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜰᴇᴀᴛᴜʀᴇ: *${feature.toUpperCase()}*\nꜱᴛᴀᴛᴜꜱ: ${!current ? 'ᴀᴄᴛɪᴠᴀᴛᴇᴅ' : 'ᴅᴇᴀᴄᴛɪᴠᴀᴛᴇᴅ'}`,
-            contextInfo: forwardedContext
-        });
+        let status = !current ? "ᴀᴄᴛɪᴠᴀᴛᴇᴅ" : "ᴅᴇᴀᴄᴛɪᴠᴀᴛᴇᴅ";
+        let res = `╭─── • 🥀 • ───╮\n`;
+        res += `  ꜱ ʏ ꜱ ᴛ ᴇ ᴍ  ᴜ ᴘ ᴅ ᴀ ᴛ ᴇ  \n`;
+        res += `╰─── • 🥀 • ───╯\n\n`;
+        res += `🥀  ꜰᴇᴀᴛᴜʀᴇ: ${feature.toUpperCase()}\n`;
+        res += `🥀  ꜱᴛᴀᴛᴜꜱ: ${status}\n\n`;
+        res += `_ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ_`;
+
+        await sock.sendMessage(m.key.remoteJid, { text: res, contextInfo: forwardedContext });
     }
 };
