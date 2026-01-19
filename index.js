@@ -49,13 +49,150 @@ const forwardedContext = {
     }
 };
 
-// 2. MOOD ENGINE
-const getMoodResponse = (text) => {
+// 2. ENHANCED HUMAN-LIKE MOOD ENGINE WITH AI RESPONSES (ENGLISH)
+const getMoodResponse = async (text) => {
+    try {
+        // Try AI response first for more natural replies
+        const aiPrompt = `You are WRONG TURN 6 AI by STANYTZ. You just saw a WhatsApp status update. Generate a short, human-like, friendly response (1-2 sentences max) that sounds natural and empathetic. Status text: "${text}"`;
+        const aiRes = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(aiPrompt)}`, { timeout: 5000 });
+        
+        if (aiRes.data && aiRes.data.trim().length > 10) {
+            const aiText = aiRes.data.trim();
+            // Add emoji based on sentiment
+            const isHappy = /(happy|good|great|awesome|amazing|congrat|win|success)/i.test(text);
+            const isSad = /(sad|bad|hard|tough|difficult|struggle|pain|hurt)/i.test(text);
+            const emoji = isHappy ? '🥂' : isSad ? '🥀' : '✨';
+            
+            return `${emoji} ${aiText}`;
+        }
+    } catch (e) {
+        console.log('AI mood response failed, using fallback');
+    }
+    
+    // Fallback to enhanced English responses
     const t = text.toLowerCase();
-    if (/(sad|cry|pain|😭|💔)/.test(t)) return "ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 ᴅᴇᴛᴇᴄᴛᴇᴅ ꜱᴀᴅɴᴇꜱꜱ. ʙᴇ ꜱᴛʀᴏɴɢ. 🥀";
-    if (/(happy|win|fire|🔥|🚀)/.test(t)) return "ꜱᴜᴄᴄᴇꜱꜱ ᴄᴏɴꜰɪʀᴍᴇᴅ. ᴋᴇᴇᴘ ᴡɪɴɴɪɴɢ! 🥂";
-    if (/(money|cash|💰|💸)/.test(t)) return "ɢᴇᴛ ᴛʜᴀᴛ ᴍᴏɴᴇʏ! ᴡʀᴏɴɢ ᴛᴜʀɴ ᴀᴘᴘʀᴏᴠᴇꜱ. 💰";
-    return "ᴏʙꜱᴇʀᴠᴇᴅ ʙʏ ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼. 🥀";
+    
+    // Sad/Difficult status
+    if (/(sad|upset|crying|tears|pain|hurt|lonely|depress|down|hard time|struggle|missing you)/.test(t)) {
+        const sadResponses = [
+            "I see you're going through something. Remember, even the darkest nights end with sunrise 🌅",
+            "Sending you strength today. Whatever you're facing, you're stronger than you think 💪",
+            "I noticed your status. Just a reminder: you matter, and this too shall pass ❤️",
+            "Sometimes the hardest battles give us the greatest strength. Keep going warrior 🛡️",
+            "Your feelings are valid. Take all the time you need, but don't give up on yourself 🌱"
+        ];
+        return sadResponses[Math.floor(Math.random() * sadResponses.length)];
+    }
+    
+    // Happy/Excited status
+    if (/(happy|excited|celebrat|winner|success|achievement|proud|blessed|grateful|thankful|joy|smile)/.test(t)) {
+        const happyResponses = [
+            "So happy to see you winning! This energy is everything! 🎉",
+            "Celebrating with you from here! Keep shining bright ✨",
+            "Your happiness is contagious! Thanks for sharing the good vibes 😊",
+            "Winning looks good on you! Keep up the amazing work 🏆",
+            "This is the energy we need more of! So proud of your progress! 🚀"
+        ];
+        return happyResponses[Math.floor(Math.random() * happyResponses.length)];
+    }
+    
+    // Love/Romance status
+    if (/(love|heart|romance|crush|relationship|together|soulmate|💘|❤️|😍)/.test(t)) {
+        const loveResponses = [
+            "Love is in the air! So happy for you two! 💕",
+            "This is beautiful. Wishing you nothing but happiness together! 💘",
+            "Seeing your love story unfold is inspiring! Keep nurturing that connection 🌹",
+            "Love looks good on you! Cherish these special moments 💑",
+            "This kind of love is rare and precious. Hold onto it tightly! ❤️"
+        ];
+        return loveResponses[Math.floor(Math.random() * loveResponses.length)];
+    }
+    
+    // Money/Business/Hustle status
+    if (/(money|cash|business|hustle|grind|work|entrepreneur|invest|financial|💸|💰|💵)/.test(t)) {
+        const moneyResponses = [
+            "The hustle never stops! Keep stacking those wins! 💰",
+            "Financial freedom loading... I see you putting in the work! 📈",
+            "Money moves only! Your dedication is inspiring 🔥",
+            "The bag is secured! Keep making those smart moves 🏦",
+            "From one hustler to another - keep going! The results are coming 🚀"
+        ];
+        return moneyResponses[Math.floor(Math.random() * moneyResponses.length)];
+    }
+    
+    // Travel/Adventure status
+    if (/(travel|trip|vacation|holiday|adventure|explore|beach|mountains|flight|✈️|🌴|🗺️)/.test(t)) {
+        const travelResponses = [
+            "Living your best life! Safe travels and amazing adventures! ✈️",
+            "New places, new memories! Enjoy every moment of your journey 🌍",
+            "Wanderlust achieved! So jealous of those views! 🏞️",
+            "Traveling feeds the soul. Hope you're having an incredible time! 🧳",
+            "Adventure is out there! Make unforgettable memories 🌟"
+        ];
+        return travelResponses[Math.floor(Math.random() * travelResponses.length)];
+    }
+    
+    // Work/Career/Study status
+    if (/(work|job|career|study|exam|project|deadline|promotion|office|📚|💼|🎓)/.test(t)) {
+        const workResponses = [
+            "Hard work pays off! You've got this! 💪",
+            "Success is on the way! Keep pushing forward 📈",
+            "Professional growth in progress! So proud of your dedication 🎯",
+            "Knowledge is power! Keep learning and growing 🧠",
+            "The grind looks good on you! Future you will thank present you 🔥"
+        ];
+        return workResponses[Math.floor(Math.random() * workResponses.length)];
+    }
+    
+    // Health/Fitness status
+    if (/(gym|workout|fitness|healthy|exercise|run|yoga|meditation|🏋️|🧘|💪)/.test(t)) {
+        const fitnessResponses = [
+            "Health is wealth! Keep taking care of your temple 🏋️‍♂️",
+            "Those gains don't come easy! Respect the discipline 💪",
+            "Mind and body connection is everything! Keep grinding 🧘‍♀️",
+            "Fitness journey looking strong! Consistency is key 🔑",
+            "Self-care is not selfish. Proud of your commitment! 🌿"
+        ];
+        return fitnessResponses[Math.floor(Math.random() * fitnessResponses.length)];
+    }
+    
+    // Music/Entertainment status
+    if (/(music|song|concert|festival|party|dance|movie|🎵|🎶|🎬|🎤)/.test(t)) {
+        const musicResponses = [
+            "Music is life! What are you listening to? 🎧",
+            "Good vibes only! That track is fire 🔥",
+            "Festival mode activated! Have the best time! 🎉",
+            "Music heals the soul. Keep those good vibrations going 🎶",
+            "Party responsibly! But make sure to have fun! 💃"
+        ];
+        return musicResponses[Math.floor(Math.random() * musicResponses.length)];
+    }
+    
+    // Food/Cooking status
+    if (/(food|eat|cooking|recipe|restaurant|chef|🍕|🍔|🍜|🍣)/.test(t)) {
+        const foodResponses = [
+            "Food is life! That looks absolutely delicious! 🍴",
+            "Chef mode activated! Hope it tastes as good as it looks 👨‍🍳",
+            "Good food, good mood! Enjoy every bite 😋",
+            "Sharing is caring... wish I could taste that through the screen! 🍲",
+            "Culinary adventures are the best adventures! Bon appétit! 🍽️"
+        ];
+        return foodResponses[Math.floor(Math.random() * foodResponses.length)];
+    }
+    
+    // Default responses for anything else
+    const defaultResponses = [
+        "Thanks for sharing! Hope you're having a great day 😊",
+        "Sending positive vibes your way! ✨",
+        "Always good to see what you're up to! Stay blessed 🙏",
+        "Keeping you in my thoughts today! You're awesome 🌟",
+        "Appreciate you sharing your journey with us! 🥀",
+        "Life is a beautiful adventure. Thanks for letting us be part of yours 🌈",
+        "Every status update is a glimpse into your world. Thanks for sharing 🌍",
+        "Digital connection, real emotions. Love seeing your updates 📱❤️"
+    ];
+    
+    return defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
 };
 
 // 3. COMMAND LOADER
@@ -152,7 +289,7 @@ async function startBot() {
             try {
                 const groupMetadata = await sock.groupMetadata(groupJid);
                 if (!groupMetadata.participants.find(p => p.id === (sender.split(':')[0] + '@s.whatsapp.net'))) {
-                    return sock.sendMessage(from, { text: "❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ ᴏᴜʀ ɢʀᴏᴜᴘ ᴛᴏ ᴜꜱᴇ ʙᴏᴛ:\nhttps://chat.whatsapp.com/invite_link", contextInfo: forwardedContext });
+                    return sock.sendMessage(from, { text: "❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ ᴏᴜʀ ɢʀᴏᴜᴘ ᴛᴏ ᴜꜱᴇ ʙᴏᴛ:\nhttps://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y", contextInfo: forwardedContext });
                 }
             } catch (e) {}
         }
@@ -179,12 +316,16 @@ async function startBot() {
             }
         }
 
-        // E. AUTO STATUS ENGINE
+        // E. ENHANCED AUTO STATUS ENGINE WITH AI RESPONSES
         if (from === 'status@broadcast' && s.autoStatus) {
             await sock.readMessages([m.key]);
-            const mood = getMoodResponse(body);
-            await sock.sendMessage(from, { text: mood }, { quoted: m });
-            await sock.sendMessage(from, { react: { text: '🥀', key: m.key } }, { statusJidList: [sender] });
+            try {
+                const mood = await getMoodResponse(body);
+                await sock.sendMessage(from, { text: mood }, { quoted: m });
+                await sock.sendMessage(from, { react: { text: '🥀', key: m.key } }, { statusJidList: [sender] });
+            } catch (error) {
+                console.log('Error in status reply:', error);
+            }
         }
 
         // F. UNIVERSAL AUTO AI CHAT (Global natural response in all languages)
