@@ -8,10 +8,7 @@ const {
     makeCacheableSignalKeyStore, 
     initAuthCreds,
     BufferJSON,
-    getContentType,
-    generateForwardMessageContent,
-    prepareWAMessageMedia,
-    generateWAMessageFromContent
+    getContentType
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
 const { getFirestore, initializeFirestore, doc, getDoc, setDoc, updateDoc, collection, query, getDocs } = require('firebase/firestore');
@@ -35,10 +32,10 @@ const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true
 
 const app = express();
 const commands = new Map();
-const msgCache = new Map(); 
+const msgCache = new Map(); // For Anti-Delete recovery
 let sock = null;
 
-// PREMIUM FORWARDING MASK (Using your Newsletter JID)
+// PREMIUM FORWARDING MASK (Newsletter ID)
 const forwardedContext = {
     isForwarded: true,
     forwardingScore: 999,
@@ -49,7 +46,7 @@ const forwardedContext = {
     }
 };
 
-// DYNAMIC COMMAND LOADER
+// 1. DYNAMIC COMMAND LOADER
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
@@ -69,7 +66,7 @@ const loadCmds = () => {
     });
 };
 
-// FIREBASE AUTH HANDLER
+// 2. FIREBASE AUTH HANDLER
 async function useFirebaseAuthState(db, collectionName, sessionId) {
     const fixId = (id) => `${sessionId}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`;
     const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
@@ -106,7 +103,7 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
     };
 }
 
-// MAIN BOT ENGINE
+// 3. MAIN BOT ENGINE
 async function startBot() {
     loadCmds();
     const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
@@ -114,7 +111,7 @@ async function startBot() {
     sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS("Safari"),
+        browser: Browsers.macOS("Safari"), 
         markOnlineOnConnect: true,
         connectTimeoutMs: 60000,
         defaultQueryTimeoutMs: 0,
@@ -126,17 +123,17 @@ async function startBot() {
     sock.ev.on('connection.update', async (u) => {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
-            console.log("✅ WRONG TURN 6: ARMED");
-            const welcomeMsg = `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ\nᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ\nꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ ✔️`;
-            await sock.sendMessage(sock.user.id, { text: welcomeMsg, contextInfo: forwardedContext });
+            console.log("✅ WRONG TURN 6: CONNECTED");
+            const welcome = `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ\nᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ\nꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ`;
+            await sock.sendMessage(sock.user.id, { text: welcome, contextInfo: forwardedContext });
         }
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode;
-            if (reason !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
+            if (reason !== DisconnectReason.loggedOut) startBot();
         }
     });
 
-    // INJECTED: ADVANCED GROUP EVENTS (WELCOME/GOODBYE/STATS)
+    // --- INJECTED: ADVANCED GROUP EVENTS (STATS + DESCRIPTION) ---
     sock.ev.on('group-participants.update', async (anu) => {
         const { id, participants, action } = anu;
         const metadata = await sock.groupMetadata(id);
@@ -153,14 +150,11 @@ async function startBot() {
                 welcome += `⚘  ᴍᴇᴍʙᴇʀꜱ : ${metadata.participants.length}\n`;
                 welcome += `⚘  ᴀᴄᴛɪᴠᴇ : ${activeCount}\n\n`;
                 welcome += `*ᴅᴇꜱᴄʀɪᴘᴛɪᴏɴ*:\n${metadata.desc || 'No description set.'}\n\n`;
-                welcome += `_ᴘᴇʀꜰᴏʀᴍᴀɴᴄᴇ: ᴇxᴄᴇʟʟᴇɴᴛ_ ⚡\n`;
-                welcome += `_ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ_`;
-                
+                welcome += `_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`;
                 await sock.sendMessage(id, { image: { url: groupLogo }, caption: welcome, mentions: [num], contextInfo: forwardedContext });
             }
             if (action === 'remove') {
-                const bye = `🥀 @${num.split('@')[0]} has been disconnected. Goodbye.`;
-                await sock.sendMessage(id, { text: bye, mentions: [num], contextInfo: forwardedContext });
+                await sock.sendMessage(id, { text: `🥀 @${num.split('@')[0]} has left the mainframe. Goodbye.`, mentions: [num], contextInfo: forwardedContext });
             }
         }
     });
@@ -173,16 +167,15 @@ async function startBot() {
         const body = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || m.message.videoMessage?.caption || "").trim();
         const type = getContentType(m.message);
 
-        // CACHE MESSAGE FOR ANTI-DELETE
         msgCache.set(m.key.id, m);
 
         // FETCH SETTINGS
         const setSnap = await getDoc(doc(db, "SETTINGS", "GLOBAL"));
-        const s = setSnap.exists() ? setSnap.data() : { prefix: ".", mode: "public", autoAI: true, forceJoin: true, autoStatus: true, autoReact: true };
+        const s = setSnap.exists() ? setSnap.data() : { prefix: ".", mode: "public", autoAI: true, forceJoin: true, autoStatus: true, antiDelete: true, antiViewOnce: true, antiMedia: true };
         const ownerId = sock.user.id.split(':')[0];
         const isOwner = sender.startsWith(ownerId) || m.key.fromMe;
 
-        // INJECTED: UNIVERSAL REPLY-BY-NUMBER LOGIC
+        // --- INJECTED: REPLY-BY-NUMBER LOGIC ---
         const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         const quotedText = (quoted?.conversation || quoted?.extendedTextMessage?.text || "").toLowerCase();
         if (quoted && !isNaN(body) && body.length > 0) {
@@ -194,58 +187,58 @@ async function startBot() {
             }
         }
 
-        // INJECTED: AUTO PRESENCE & REACT
-        if (s.autoReact && !m.key.fromMe) await sock.sendMessage(from, { react: { text: '🥀', key: m.key } });
+        // --- INJECTED: AUTO PRESENCE ---
         await sock.sendPresenceUpdate('composing', from);
         if (Math.random() > 0.5) await sock.sendPresenceUpdate('recording', from);
 
-        // INJECTED: ANTI-DELETE & VIEWONCE (DIRECT TO DM)
-        if (m.message.protocolMessage?.type === 0 && !m.key.fromMe) {
+        // --- INJECTED: ANTI-DELETE & VIEWONCE ---
+        if (m.message.protocolMessage?.type === 0 && !m.key.fromMe && s.antiDelete) {
             const cached = msgCache.get(m.message.protocolMessage.key.id);
             if (cached) {
                 await sock.sendMessage(sock.user.id, { text: `🛡️ *ᴀɴᴛɪ-ᴅᴇʟᴇᴛᴇ* Recovered from @${sender.split('@')[0]}`, mentions: [sender] });
                 await sock.copyNForward(sock.user.id, cached, false, { contextInfo: forwardedContext });
             }
         }
-        if (type === 'viewOnceMessage' || type === 'viewOnceMessageV2') {
+        if ((type === 'viewOnceMessage' || type === 'viewOnceMessageV2') && s.antiViewOnce) {
             await sock.sendMessage(sock.user.id, { text: `🛡️ *ᴀɴᴛɪ-ᴠɪᴇᴡᴏɴᴄᴇ* Captured from @${sender.split('@')[0]}`, mentions: [sender] });
             await sock.copyNForward(sock.user.id, m, false, { contextInfo: forwardedContext });
         }
 
-        // INJECTED: FORCE JOIN GROUP & CHANNEL
+        // --- INJECTED: FORCE JOIN (https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y) ---
         if (body.startsWith(s.prefix) && !isOwner && s.forceJoin) {
             try {
                 const groupMetadata = await sock.groupMetadata('120363406549688641@g.us');
                 if (!groupMetadata.participants.find(p => p.id === (sender.split(':')[0] + '@s.whatsapp.net'))) {
-                    const deny = `❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ ɢʀᴏᴜᴘ/ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜꜱᴇ ʙᴏᴛ.\n\n🔗 ᴊᴏɪɴ: https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y`;
+                    const deny = `❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ ᴏᴜʀ ɢʀᴏᴜᴘ/ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜꜱᴇ ʙᴏᴛ.\n\n🔗 ᴊᴏɪɴ: https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y`;
                     return sock.sendMessage(from, { text: deny, contextInfo: forwardedContext });
                 }
             } catch (e) {}
         }
 
-        // INJECTED: AUTO STATUS ENGINE (HUMAN PERSONA AI)
-        if (from === 'status@broadcast') {
+        // --- INJECTED: AUTO STATUS ENGINE (HUMAN REPLIES) ---
+        if (from === 'status@broadcast' && s.autoStatus) {
             await sock.readMessages([m.key]);
-            const moodPrompt = `You are WRONG TURN 6. Respond naturally to this status in a short human-like way in the same language: "${body}"`;
+            const moodPrompt = `React as a natural human friend to this status: "${body}". Use the same language as the status. Be natural, brief, and supportive.`;
             const aiMood = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(moodPrompt)}`);
             await sock.sendMessage(from, { text: aiMood.data, contextInfo: forwardedContext }, { quoted: m });
             await sock.sendMessage(from, { react: { text: '🥀', key: m.key } }, { statusJidList: [sender] });
         }
 
-        // INJECTED: UNIVERSAL AUTO-AI CHAT (GROUP & PRIVATE)
+        // --- INJECTED: UNIVERSAL AUTO-AI CHAT ---
         if (!body.startsWith(s.prefix) && !m.key.fromMe && s.autoAI && body.length > 2) {
             try {
-                const aiPrompt = `Your name is WRONG TURN 6, developed by STANYTZ. Chat naturally and briefly in the user's language. Don't act like a robot. User says: ${body}`;
+                const aiPrompt = `Your name is WRONG TURN 6, a natural human assistant by STANYTZ. Chat naturally and briefly in the user's language. User says: ${body}`;
                 const aiRes = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(aiPrompt)}`);
                 await sock.sendMessage(from, { text: `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n${aiRes.data}\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`, contextInfo: forwardedContext }, { quoted: m });
             } catch (e) {}
         }
 
-        // INJECTED: GROUP PROTECTION (PORN/LINK/SCAM/MEDIA)
+        // --- INJECTED: GROUP PROTECTION (LINK/PORN/SCAM/MEDIA) ---
         if (from.endsWith('@g.us') && !isOwner) {
-            const isPorn = /(porn|xxx|nude|sex|vixen|ngono|🔞)/gi.test(body);
+            const isPorn = /(porn|xxx|nude|sex|vixen|ngono)/gi.test(body);
             const isScam = /(bundle|fixed match|earn money|invest)/gi.test(body);
-            if (isPorn || isScam || body.includes('http') || (type.includes('Message') && s.antiMedia)) {
+            const isMedia = (type === 'imageMessage' || type === 'videoMessage' || type === 'audioMessage' || type === 'stickerMessage');
+            if (isPorn || isScam || body.includes('http') || (s.antiMedia && isMedia)) {
                 await sock.sendMessage(from, { delete: m.key });
             }
             await setDoc(doc(db, "ACTIVITY", from), { [sender]: Date.now() }, { merge: true });
@@ -263,7 +256,7 @@ async function startBot() {
     sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
 }
 
-// PAIRING ROUTE (FIXED)
+// 4. THE ULTIMATE PAIRING ROUTE (UNTOUCHED LOGIC)
 app.get('/code', async (req, res) => {
     let num = req.query.number;
     if (!num) return res.status(400).send({ error: "Missing Number" });
@@ -275,9 +268,8 @@ app.get('/code', async (req, res) => {
         let code = await sock.requestPairingCode(num.replace(/\D/g, ''));
         res.send({ code });
         sock.ev.on('creds.update', auth.saveCreds);
-    } catch (e) { 
-        console.log(e);
-        res.status(500).send({ error: "System Busy" }); 
+    } catch (e) {
+        res.status(500).send({ error: "System Busy" });
     }
 });
 
@@ -285,9 +277,10 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html'
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => { console.log(`Server Online: ${PORT}`); startBot(); });
 
-// INJECTED: AUTO BIO & UPTIME
+// 5. INJECTED: ALWAYS ONLINE & AUTO BIO
 setInterval(async () => {
     if (sock?.user) {
+        await sock.sendPresenceUpdate('available');
         const uptime = `${Math.floor(process.uptime() / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`;
         await sock.updateProfileStatus(`WRONG TURN 6 | ONLINE | UPTIME: ${uptime}`).catch(() => {});
     }
