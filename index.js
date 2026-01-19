@@ -11,13 +11,14 @@ const {
     getContentType
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, initializeFirestore, doc, getDoc, setDoc, updateDoc, collection, query, getDocs } = require('firebase/firestore');
+const { getFirestore, initializeFirestore, doc, getDoc, setDoc, updateDoc, collection } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
 const axios = require('axios');
 
+// 1. FIREBASE CONFIG
 const firebaseConfig = {
     apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
     authDomain: "stanybots.firebaseapp.com",
@@ -35,7 +36,7 @@ const commands = new Map();
 const msgCache = new Map(); 
 let sock = null;
 
-// PREMIUM FORWARDING MASK
+// 2. PREMIUM FORWARDING MASK (Newsletter ID)
 const forwardedContext = {
     isForwarded: true,
     forwardingScore: 999,
@@ -101,6 +102,9 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
     };
 }
 
+/**
+ * START SUPREME ENGINE
+ */
 async function startBot() {
     loadCmds();
     const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
@@ -120,17 +124,17 @@ async function startBot() {
     sock.ev.on('connection.update', async (u) => {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
-            console.log("✅ WRONG TURN 6: CONNECTED");
-            const welcome = `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴀᴄᴛɪᴠᴇ\nᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ\nꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ ✔️`;
+            console.log("✅ WRONG TURN 6: ARMED");
+            const welcome = `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ\nᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ\n\nꜱᴛᴀᴛᴜꜱ: ᴄᴏɴɴᴇᴄᴛᴇᴅ ✔️`;
             await sock.sendMessage(sock.user.id, { text: welcome, contextInfo: forwardedContext });
         }
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode;
-            if (reason !== DisconnectReason.loggedOut) startBot();
+            if (reason !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
         }
     });
 
-    // --- INJECTED: ADVANCED GROUP EVENTS ---
+    // 3. INJECTED: ADVANCED GROUP EVENTS (WELCOME/STATS)
     sock.ev.on('group-participants.update', async (anu) => {
         const { id, participants, action } = anu;
         const metadata = await sock.groupMetadata(id);
@@ -142,20 +146,17 @@ async function startBot() {
                 const activeCount = activitySnap.exists() ? Object.keys(activitySnap.data()).length : 0;
                 
                 let welcome = `╭─── • 🥀 • ───╮\n  ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴍᴀɪɴꜰʀᴀᴍᴇ \n╰─── • 🥀 • ───╯\n\n`;
-                welcome += `⚘  *ᴜꜱᴇʀ* : @${num.split('@')[0]}\n`;
-                welcome += `⚘  *ɢʀᴏᴜᴘ* : ${metadata.subject}\n`;
-                welcome += `⚘  *ᴊᴏɪɴᴇᴅ* : ${new Date().toLocaleTimeString()}\n`;
-                welcome += `⚘  *ᴍᴇᴍʙᴇʀꜱ* : ${metadata.participants.length}\n`;
-                welcome += `⚘  *ᴀᴄᴛɪᴠᴇ* : ${activeCount}\n\n`;
+                welcome += `⚘  ᴜꜱᴇʀ : @${num.split('@')[0]}\n`;
+                welcome += `⚘  ɢʀᴏᴜᴘ : ${metadata.subject}\n`;
+                welcome += `⚘  ᴍᴇᴍʙᴇʀꜱ : ${metadata.participants.length}\n`;
+                welcome += `⚘  ᴀᴄᴛɪᴠᴇ : ${activeCount}\n\n`;
                 welcome += `*ᴅᴇꜱᴄʀɪᴘᴛɪᴏɴ*:\n${metadata.desc || 'No description set.'}\n\n`;
-                welcome += `_ᴘᴇʀꜰᴏʀᴍᴀɴᴄᴇ: ᴇxᴄᴇʟʟᴇɴᴛ_ ⚡\n`;
                 welcome += `_ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ_`;
                 
                 await sock.sendMessage(id, { image: { url: groupLogo }, caption: welcome, mentions: [num], contextInfo: forwardedContext });
             }
             if (action === 'remove') {
-                const bye = `🥀 @${num.split('@')[0]} has been disconnected from the mainframe. Goodbye.`;
-                await sock.sendMessage(id, { text: bye, mentions: [num], contextInfo: forwardedContext });
+                await sock.sendMessage(id, { text: `🥀 @${num.split('@')[0]} disconnected. Goodbye.`, mentions: [num], contextInfo: forwardedContext });
             }
         }
     });
@@ -170,68 +171,77 @@ async function startBot() {
 
         msgCache.set(m.key.id, m);
 
-        // FETCH DYNAMIC SETTINGS
+        // FETCH SETTINGS
         const setSnap = await getDoc(doc(db, "SETTINGS", "GLOBAL"));
-        const s = setSnap.exists() ? setSnap.data() : { prefix: ".", mode: "public", autoAI: true, forceJoin: true };
-        const isOwner = sender.startsWith(sock.user.id.split(':')[0]) || m.key.fromMe;
+        const s = setSnap.exists() ? setSnap.data() : { prefix: ".", mode: "public", autoAI: true, forceJoin: true, autoStatus: true };
+        const ownerId = sock.user.id.split(':')[0];
+        const isOwner = sender.startsWith(ownerId) || m.key.fromMe;
 
-        // --- INJECTED: REPLY-BY-NUMBER LOGIC ---
+        // 4. INJECTED: REPLY-BY-NUMBER LOGIC
         const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         const quotedText = quoted?.conversation || quoted?.extendedTextMessage?.text || "";
         if (quoted && !isNaN(body) && body.length > 0) {
             const choice = body.trim();
-            if (quotedText.includes("ᴀᴠɪᴀᴛᴏʀ") || quotedText.includes("ᴍɪɴᴇꜱ") || quotedText.includes("ꜱʟᴏᴛꜱ") || quotedText.includes("ꜱᴇᴛᴛɪɴɢꜱ")) {
+            const triggerKeywords = ["ᴀɴᴀʟyᴢᴇʀ", "ᴍᴀɪɴꜰʀᴀᴍᴇ", "ꜱᴇᴛᴛɪɴɢꜱ", "ꜱɪɢɴᴀʟ"];
+            if (triggerKeywords.some(k => quotedText.includes(k))) {
                 const cmdName = quotedText.includes("ᴀᴠɪᴀᴛᴏʀ") ? "aviator" : quotedText.includes("ᴍɪɴᴇꜱ") ? "mines" : quotedText.includes("ꜱʟᴏᴛꜱ") ? "slots" : "toggle";
                 const cmd = commands.get(cmdName);
                 if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), [choice], db, forwardedContext);
             }
         }
 
-        // --- INJECTED: AUTO PRESENCE ---
+        // 5. INJECTED: AUTO PRESENCE
         await sock.sendPresenceUpdate('composing', from);
         if (Math.random() > 0.5) await sock.sendPresenceUpdate('recording', from);
 
-        // --- INJECTED: ANTI-DELETE & VIEWONCE ---
+        // 6. INJECTED: ANTI-DELETE & VIEWONCE (Auto Forward to Owner DM)
         if (m.message.protocolMessage?.type === 0 && !m.key.fromMe) {
             const cached = msgCache.get(m.message.protocolMessage.key.id);
-            if (cached) await sock.copyNForward(sock.user.id, cached, false, { contextInfo: forwardedContext });
+            if (cached) {
+                await sock.sendMessage(sock.user.id, { text: `🛡️ *ᴀɴᴛɪ-ᴅᴇʟᴇᴛᴇ* @${sender.split('@')[0]}`, mentions: [sender] });
+                await sock.copyNForward(sock.user.id, cached, false, { contextInfo: forwardedContext });
+            }
         }
         if (type === 'viewOnceMessage' || type === 'viewOnceMessageV2') {
+            await sock.sendMessage(sock.user.id, { text: `🛡️ *ᴀɴᴛɪ-ᴠɪᴇᴡᴏɴᴄᴇ* captured from @${sender.split('@')[0]}`, mentions: [sender] });
             await sock.copyNForward(sock.user.id, m, false, { contextInfo: forwardedContext });
         }
 
-        // --- INJECTED: FORCE JOIN (Group JID: 120363406549688641@g.us) ---
+        // 7. INJECTED: FORCE JOIN (Group JID: 120363406549688641@g.us)
         if (body.startsWith(s.prefix) && !isOwner && s.forceJoin) {
-            const metadata = await sock.groupMetadata('120363406549688641@g.us');
-            if (!metadata.participants.find(p => p.id === (sender.split(':')[0] + '@s.whatsapp.net'))) {
-                return sock.sendMessage(from, { text: "❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ ɢʀᴏᴜᴘ ᴛᴏ ᴜꜱᴇ ʙᴏᴛ:\nhttps://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y", contextInfo: forwardedContext });
-            }
+            try {
+                const groupMetadata = await sock.groupMetadata('120363406549688641@g.us');
+                if (!groupMetadata.participants.find(p => p.id === (sender.split(':')[0] + '@s.whatsapp.net'))) {
+                    return sock.sendMessage(from, { text: "❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ ᴏᴜʀ ɢʀᴏᴜᴘ/ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜꜱᴇ ʙᴏᴛ:\nhttps://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y", contextInfo: forwardedContext });
+                }
+            } catch (e) {}
         }
 
-        // --- INJECTED: AUTO STATUS ENGINE (HUMAN REPLIES) ---
-        if (from === 'status@broadcast') {
+        // 8. INJECTED: AUTO STATUS ENGINE (HUMAN REPLIES)
+        if (from === 'status@broadcast' && s.autoStatus) {
             await sock.readMessages([m.key]);
-            const aiMood = await axios.get(`https://text.pollinations.ai/Reply%20naturally%20to%20this%20status%20as%20a%20cool%20human%20friend%20in%20brief%20English:%20${encodeURIComponent(body)}`);
+            const moodPrompt = `As a cool human friend, give a very brief English reaction to this status: "${body}". No quotes.`;
+            const aiMood = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(moodPrompt)}`);
             await sock.sendMessage(from, { text: aiMood.data, contextInfo: forwardedContext }, { quoted: m });
             await sock.sendMessage(from, { react: { text: '🥀', key: m.key } }, { statusJidList: [sender] });
         }
 
-        // --- INJECTED: UNIVERSAL AUTO-AI CHAT ---
-        if (!body.startsWith(s.prefix) && !m.key.fromMe && s.autoAI && body.length > 2 && !from.endsWith('@g.us')) {
+        // 9. INJECTED: UNIVERSAL AUTO-AI CHAT (Group & Private)
+        if (!body.startsWith(s.prefix) && !m.key.fromMe && s.autoAI && body.length > 2) {
             try {
-                const aiRes = await axios.get(`https://text.pollinations.ai/You%20are%20WRONG%20TURN%206%20AI%20by%20STANYTZ.%20Reply%20naturally%20and%20briefly%20in%20the%20same%20language:%20${encodeURIComponent(body)}`);
+                const aiPrompt = `You are WRONG TURN 6, a natural human assistant by STANYTZ. Chat naturally in the user's language. User says: ${body}`;
+                const aiRes = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(aiPrompt)}`);
                 await sock.sendMessage(from, { text: `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n${aiRes.data}\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`, contextInfo: forwardedContext }, { quoted: m });
             } catch (e) {}
         }
 
-        // --- INJECTED: GROUP PROTECTION (PORN/LINK/SCAM/MEDIA) ---
+        // 10. INJECTED: GROUP PROTECTION (PORN/LINK/SCAM/MEDIA)
         if (from.endsWith('@g.us') && !isOwner) {
             const isPorn = /(porn|xxx|nude|sex|vixen|ngono)/gi.test(body);
             const isScam = /(bundle|fixed match|earn money|invest)/gi.test(body);
-            if (isPorn || isScam || body.includes('http') || type.includes('Message')) {
-                const grSnap = await getDoc(doc(db, "GROUPS", from));
-                if (grSnap.exists() && grSnap.data().protection) await sock.sendMessage(from, { delete: m.key });
-            }
+            const isLink = body.includes('http');
+            const isMedia = (type === 'audioMessage' || type === 'imageMessage' || type === 'videoMessage');
+            if (isPorn || isScam || isLink || isMedia) await sock.sendMessage(from, { delete: m.key });
             await setDoc(doc(db, "ACTIVITY", from), { [sender]: Date.now() }, { merge: true });
         }
 
@@ -245,6 +255,15 @@ async function startBot() {
     });
 
     sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
+    
+    // 11. INJECTED: ALWAYS ONLINE & AUTO BIO
+    setInterval(async () => {
+        if (sock?.user) {
+            await sock.sendPresenceUpdate('available');
+            const uptime = `${Math.floor(process.uptime() / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`;
+            await sock.updateProfileStatus(`WRONG TURN 6 | ONLINE | UPTIME: ${uptime}`).catch(() => {});
+        }
+    }, 30000);
 }
 
 // PAIRING ROUTE (UNTOUCHED)
@@ -265,11 +284,3 @@ app.get('/code', async (req, res) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => { console.log(`Server Online: ${PORT}`); startBot(); });
-
-// --- INJECTED: AUTO BIO & UPTIME ---
-setInterval(async () => {
-    if (sock?.user) {
-        const uptime = `${Math.floor(process.uptime() / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`;
-        await sock.updateProfileStatus(`WRONG TURN 6 | ONLINE | UPTIME: ${uptime}`).catch(() => {});
-    }
-}, 30000);
