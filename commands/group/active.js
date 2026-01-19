@@ -1,17 +1,15 @@
 const { doc, getDoc } = require('firebase/firestore');
 module.exports = {
     name: 'active',
-    async execute(m, sock, commands, args, db) {
+    async execute(m, sock, commands, args, db, forwardedContext) {
         const from = m.key.remoteJid;
         const snap = await getDoc(doc(db, "ACTIVITY", from));
-        if (!snap.exists()) return sock.sendMessage(from, { text: "No activity data found." });
+        if (!snap.exists()) return m.reply("No activity recorded yet.");
 
         const activity = snap.data();
-        let list = `📊 *WRONG TURN 6 ACTIVE MEMBERS*\n\n`;
-        Object.keys(activity).forEach(u => {
-            list += `• @${u.split('@')[0]}\n`;
-        });
-        list += `\nDeveloper: STANYTZ`;
-        await sock.sendMessage(from, { text: list, mentions: Object.keys(activity) });
+        let list = `*ACTIVE MEMBERS* ✔️\n\n`;
+        Object.keys(activity).forEach(u => list += `• @${u.split('@')[0]}\n`);
+        
+        await sock.sendMessage(from, { text: list, mentions: Object.keys(activity), contextInfo: forwardedContext });
     }
 };
