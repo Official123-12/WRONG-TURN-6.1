@@ -1,28 +1,53 @@
+/**
+ * 🥀 WRONG TURN 6 - TOGGLE ENGINE
+ * 🥀 HANDLES REPLY-BY-NUMBER FOR SETTINGS
+ */
+
 const { doc, setDoc, getDoc } = require('firebase/firestore');
 
 module.exports = {
     name: 'toggle',
     async execute(m, sock, commands, args, db, forwardedContext) {
-        const ownerId = sock.user.id.split(':')[0];
-        if (!m.key.fromMe && !m.sender.startsWith(ownerId)) return;
-
-        const feature = args[0]?.toLowerCase();
-        if (!feature) return sock.sendMessage(m.key.remoteJid, { text: "Provide a feature name to toggle." });
+        const from = m.key.remoteJid;
+        const choice = args[0];
+        
+        if (!choice || isNaN(choice)) return;
 
         const settingsRef = doc(db, "SETTINGS", "GLOBAL");
         const snap = await getDoc(settingsRef);
-        const current = snap.exists() ? snap.data()[feature] : false;
+        const s = snap.exists() ? snap.data() : {};
 
-        await setDoc(settingsRef, { [feature]: !current }, { merge: true });
+        // Mapping Numbers to Firebase Keys
+        const menuMap = {
+            "1": "autoAI",
+            "2": "autoType",
+            "3": "autoRecord",
+            "4": "autoStatus",
+            "5": "antiLink",
+            "6": "antiPorn",
+            "7": "antiScam",
+            "8": "antiDelete",
+            "9": "antiViewOnce",
+            "10": "forceJoin"
+        };
 
-        let status = !current ? "ᴀᴄᴛɪᴠᴀᴛᴇᴅ" : "ᴅᴇᴀᴄᴛɪᴠᴀᴛᴇᴅ";
-        let res = `╭─── • 🥀 • ───╮\n`;
-        res += `  ꜱ ʏ ꜱ ᴛ ᴇ ᴍ  ᴜ ᴘ ᴅ ᴀ ᴛ ᴇ  \n`;
-        res += `╰─── • 🥀 • ───╯\n\n`;
-        res += `🥀  ꜰᴇᴀᴛᴜʀᴇ: ${feature.toUpperCase()}\n`;
-        res += `🥀  ꜱᴛᴀᴛᴜꜱ: ${status}\n\n`;
-        res += `_ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ_`;
+        const key = menuMap[choice];
 
-        await sock.sendMessage(m.key.remoteJid, { text: res, contextInfo: forwardedContext });
+        if (key) {
+            const newState = !s[key];
+            await setDoc(settingsRef, { [key]: newState }, { merge: true });
+            
+            let res = `╭─── • 🥀 • ───╮\n  ꜱʏꜱᴛᴇᴍ ᴜᴘᴅᴀᴛᴇ  \n╰─── • 🥀 • ───╯\n\n`;
+            res += `🥀 *ꜰᴇᴀᴛᴜʀᴇ* : ${key.toUpperCase()}\n`;
+            res += `🥀 *ꜱᴛᴀᴛᴜꜱ* : ${newState ? 'ᴀᴄᴛɪᴠᴀᴛᴇᴅ ✅' : 'ᴅᴇᴀᴄᴛɪᴠᴀᴛᴇᴅ ❌'}\n\n`;
+            res += `_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`;
+
+            await sock.sendMessage(from, { text: res, contextInfo: forwardedContext });
+        } else if (choice === "11") {
+            // Special Logic for Mode (Public/Private)
+            const newMode = s.mode === "public" ? "private" : "public";
+            await setDoc(settingsRef, { mode: newMode }, { merge: true });
+            await sock.sendMessage(from, { text: `🥀 *ꜱʏꜱᴛᴇᴍ ᴍᴏᴅᴇ* : ${newMode.toUpperCase()}`, contextInfo: forwardedContext });
+        }
     }
 };
