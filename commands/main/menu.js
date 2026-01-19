@@ -4,12 +4,18 @@ module.exports = {
         const from = m.key.remoteJid;
         const uptime = Math.floor(process.uptime() / 3600) + "h " + Math.floor((process.uptime() % 3600) / 60) + "m";
 
-        let menu = `*W R O N G  T U R N  B O T*  ✔️\n`;
-        menu += `_S y s t e m   O p e r a t i o n a l_\n\n`;
+        let menu = `┏━━━━━━━━━━━━━━━━━━━━┓\n`;
+        menu += `┃   ᴡ ʀ ᴏ ɴ ɢ  ᴛ ᴜ ʀ ɴ  ʙ ᴏ ᴛ  \n`;
+        menu += `┗━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
         
-        menu += `⚘  *U S E R* : ${m.pushName}\n`;
-        menu += `⚘  *U P T I M E* : ${uptime}\n`;
-        menu += `⚘  *C H A N N E L* : Verified\n\n`;
+        menu += `┌───  🥀  ꜱʏꜱᴛᴇᴍ ɪɴꜰᴏ\n`;
+        menu += `│\n`;
+        menu += `│ 🥀 ᴜꜱᴇʀ: ${m.pushName}\n`;
+        menu += `│ 🥀 ᴜᴘᴛɪᴍᴇ: ${uptime}\n`;
+        menu += `│ 🥀 ᴅᴇᴠ: ꜱᴛᴀɴʏᴛ𝗭\n`;
+        menu += `│ 🥀 ᴠᴇʀꜱɪᴏɴ: 𝟼.𝟼.𝟶\n`;
+        menu += `│\n`;
+        menu += `└──────────────────────┘\n\n`;
 
         const cats = {};
         commands.forEach(c => {
@@ -17,27 +23,25 @@ module.exports = {
             cats[c.category].push(c.name);
         });
 
-        for (const [category, cmds] of Object.entries(cats)) {
-            menu += `🥀  *${category.toUpperCase()}*\n`;
-            menu += `───────────────\n`;
-            cmds.sort().forEach(name => {
-                menu += `   ◦  .${name}\n`;
-            });
-            menu += `\n`;
+        for (const [cat, cmds] of Object.entries(cats)) {
+            menu += `┏━━━〔 🥀 *${cat.toUpperCase()}* 〕━━━┓\n`;
+            cmds.sort().forEach(n => menu += `┃  ◦ .${n}\n`);
+            menu += `┗━━━━━━━━━━━━━━━━━━┛\n\n`;
         }
 
-        menu += `*𓆩  STANYTZ INDUSTRIES  𓆪*`;
+        menu += `_© 𝟮𝟬𝟮𝟲 ꜱᴛᴀɴʏᴛᴢ ɪɴᴅᴜꜱᴛʀɪᴇꜱ_  🥀🥂`;
 
         await sock.sendMessage(from, { 
             text: menu, 
             contextInfo: {
                 ...forwardedContext,
                 externalAdReply: {
-                    title: "WRONG TURN MAINFRRAME",
-                    body: "STANYTZ MASTER ENGINE",
+                    title: "ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 ✔️",
+                    body: "ꜱʏꜱᴛᴇᴍ ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ",
                     mediaType: 1,
                     renderLargerThumbnail: true,
-                    thumbnailUrl: "https://files.catbox.moe/59ays3.jpg"
+                    thumbnailUrl: "https://files.catbox.moe/59ays3.jpg",
+                    showAdAttribution: true
                 }
             }
         }, { quoted: m });
