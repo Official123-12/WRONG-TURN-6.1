@@ -11,14 +11,13 @@ const {
     getContentType
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, initializeFirestore, doc, getDoc, setDoc, updateDoc, collection, query, getDocs } = require('firebase/firestore');
+const { getFirestore, initializeFirestore, doc, getDoc, setDoc, deleteDoc } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
 const axios = require('axios');
 
-// 1. FIREBASE CONFIG
 const firebaseConfig = {
     apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
     authDomain: "stanybots.firebaseapp.com",
@@ -45,16 +44,6 @@ const forwardedContext = {
         serverMessageId: 1,
         newsletterName: 'ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀'
     }
-};
-
-/**
- * MOOD ANALYSIS (HUMAN PERSONA)
- */
-const getMoodReply = (text) => {
-    const t = text.toLowerCase();
-    if (/(sad|cry|hurt|pain|😭|💔|😔)/.test(t)) return "Wrong Turn 6 detected sadness. Stay strong, better days ahead. 🥀";
-    if (/(happy|blessed|success|win|🔥|🚀|💰)/.test(t)) return "Pure greatness! WRONG TURN 6 celebrates this win with you! 🥂";
-    return "Observed by Wrong Turn 6. 🥀";
 };
 
 const loadCmds = () => {
@@ -87,7 +76,7 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
     };
     const removeData = async (id) => deleteDoc(doc(db, collectionName, fixId(id)));
     let creds = await readData('creds') || initAuthCreds();
-    return {
+    return { 
         state: { creds, keys: {
             get: async (type, ids) => {
                 const data = {};
@@ -102,59 +91,57 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
                 for (const type in data) {
                     for (const id in data[type]) {
                         const value = data[type][id];
-                        value ? await writeData(value, `${type}-${id}`) : null;
+                        if (value) await writeData(value, `${type}-${id}`);
                     }
                 }
             }
-        }},
+        }}, 
         saveCreds: () => writeData(creds, 'creds'),
-        clearSession: () => removeData('creds')
+        clearAll: () => removeData('creds')
     };
 }
 
+/**
+ * MAIN BOT ENGINE
+ */
 async function startBot() {
     loadCmds();
-    const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
+    const auth = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
     
-    // Safety: Ikiwa haina session na haipo kwenye pairing mode, isiwake kuzuia 428 error
-    if (!state.creds.registered && !process.env.PAIRING_ACTIVE) {
-        console.log("📡 WT6: STANDBY MODE - AWAITING LINK.");
+    if (!auth.state.creds.registered && !sock) {
+        console.log("📡 WRONG TURN 6: STANDBY...");
         return;
     }
 
     sock = makeWASocket({
-        auth: state,
+        auth: auth.state,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.ubuntu("Chrome"), 
+        browser: Browsers.ubuntu("Chrome"), // Faster & More Stable
         markOnlineOnConnect: true,
         generateHighQualityLinkPreview: true,
         connectTimeoutMs: 60000
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('creds.update', auth.saveCreds);
 
     sock.ev.on('connection.update', async (u) => {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
-            console.log("✅ WRONG TURN 6: ARMED");
+            console.log("✅ WRONG TURN 6: ONLINE");
             const welcome = `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ\nᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ\nꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ ✔️`;
             await sock.sendMessage(sock.user.id, { text: welcome, contextInfo: forwardedContext });
         }
-        if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
-            setTimeout(startBot, 5000);
-        }
+        if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
     });
 
-    // GROUP EVENTS
+    // GROUP EVENTS (WELCOME/STATS)
     sock.ev.on('group-participants.update', async (anu) => {
         const { id, participants, action } = anu;
-        const metadata = await sock.groupMetadata(id);
-        const groupLogo = await sock.profilePictureUrl(id, 'image').catch(() => 'https://files.catbox.moe/59ays3.jpg');
-        for (let num of participants) {
-            if (action === 'add') {
-                const activitySnap = await getDoc(doc(db, "ACTIVITY", id));
-                const activeCount = activitySnap.exists() ? Object.keys(activitySnap.data()).length : 0;
-                let welcome = `╭─── • 🥀 • ───╮\n  ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴍᴀɪɴꜰʀᴀᴍᴇ \n╰─── • 🥀 • ───╯\n\n⚘ ᴜꜱᴇʀ : @${num.split('@')[0]}\n⚘ ɢʀᴏᴜᴘ : ${metadata.subject}\n⚘ ᴍᴇᴍʙᴇʀꜱ : ${metadata.participants.length}\n⚘ ᴀᴄᴛɪᴠᴇ : ${activeCount}\n\n*ᴅᴇꜱᴄʀɪᴘᴛɪᴏɴ*:\n${metadata.desc || 'No description.'}\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`;
+        if (action === 'add') {
+            const metadata = await sock.groupMetadata(id);
+            const groupLogo = await sock.profilePictureUrl(id, 'image').catch(() => 'https://files.catbox.moe/59ays3.jpg');
+            for (let num of participants) {
+                let welcome = `╭─── • 🥀 • ───╮\n  ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴍᴀɪɴꜰʀᴀᴍᴇ \n╰─── • 🥀 • ───╯\n\n⚘ ᴜꜱᴇʀ: @${num.split('@')[0]}\n⚘ ɢʀᴏᴜᴘ: ${metadata.subject}\n\n*ᴅᴇꜱᴄʀɪᴘᴛɪᴏɴ*:\n${metadata.desc || 'No description.'}\n\n_ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ_`;
                 await sock.sendMessage(id, { image: { url: groupLogo }, caption: welcome, mentions: [num], contextInfo: forwardedContext });
             }
         }
@@ -169,17 +156,17 @@ async function startBot() {
         const type = getContentType(m.message);
 
         msgCache.set(m.key.id, m);
-
-        // CONFIG FETCH
-        const setSnap = await getDoc(doc(db, "SETTINGS", "GLOBAL"));
-        const s = setSnap.exists() ? setSnap.data() : { prefix: ".", mode: "public", autoAI: true, forceJoin: true, autoStatus: true };
         const ownerId = sock.user.id?.split(':')[0] || '255';
         const isOwner = sender.startsWith(ownerId) || m.key.fromMe;
 
-        // REPLY-BY-NUMBER
+        // FETCH CONFIG
+        const setSnap = await getDoc(doc(db, "SETTINGS", "GLOBAL"));
+        const s = setSnap.exists() ? setSnap.data() : { prefix: ".", mode: "public", autoAI: true, forceJoin: true, autoStatus: true };
+
+        // REPLY-BY-NUMBER LOGIC
         const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         const quotedText = (quoted?.conversation || quoted?.extendedTextMessage?.text || "").toLowerCase();
-        if (quoted && !isNaN(body) && body.length > 0) {
+        if (quoted && !isNaN(body)) {
             for (let [cmdName, cmdObj] of commands) {
                 if (quotedText.includes(cmdName)) {
                     await cmdObj.execute(m, sock, Array.from(commands.values()), [body.trim()], db, forwardedContext);
@@ -200,7 +187,7 @@ async function startBot() {
             await sock.copyNForward(sock.user.id, m, false, { contextInfo: forwardedContext });
         }
 
-        // FORCE JOIN
+        // FORCE JOIN (Group JID: 120363406549688641@g.us)
         if (body.startsWith(s.prefix) && !isOwner && s.forceJoin) {
             try {
                 const groupMetadata = await sock.groupMetadata('120363406549688641@g.us');
@@ -210,18 +197,18 @@ async function startBot() {
             } catch (e) {}
         }
 
-        // AUTO STATUS Engine (AI replies)
+        // AUTO STATUS (HUMAN)
         if (from === 'status@broadcast') {
             await sock.readMessages([m.key]);
-            const aiMood = await axios.get(`https://text.pollinations.ai/Reply%20briefly%20in%20natural%20English%20to%20this%20status%20as%20a%20human%20friend:%20${encodeURIComponent(body)}`);
+            const aiMood = await axios.get(`https://text.pollinations.ai/Reply%20briefly%20in%20natural%20English%20to%20this%20status:%20${encodeURIComponent(body)}`);
             await sock.sendMessage(from, { text: aiMood.data, contextInfo: forwardedContext }, { quoted: m });
             await sock.sendMessage(from, { react: { text: '🥀', key: m.key } }, { statusJidList: [sender] });
         }
 
-        // AUTO AI CHAT
+        // UNIVERSAL AUTO-AI CHAT
         if (!body.startsWith(s.prefix) && !m.key.fromMe && s.autoAI && body.length > 2 && !from.endsWith('@g.us')) {
             try {
-                const aiRes = await axios.get(`https://text.pollinations.ai/Your%20name%20is%20WRONG%20TURN%206%20by%20STANYTZ.Reply%20briefly%20in%20the%20same%20language:%20${encodeURIComponent(body)}`);
+                const aiRes = await axios.get(`https://text.pollinations.ai/Your%20name%20is%20WRONG%20TURN%206%20by%20STANYTZ.Reply%20briefly:%20${encodeURIComponent(body)}`);
                 await sock.sendMessage(from, { text: `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n${aiRes.data}\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`, contextInfo: forwardedContext }, { quoted: m });
             } catch (e) {}
         }
@@ -238,20 +225,22 @@ async function startBot() {
     sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
 }
 
-// THE FINAL STABLE PAIRING ROUTE
+// THE ULTIMATE STABLE PAIRING ROUTE (FIXED BUSY ERROR)
 app.get('/code', async (req, res) => {
     let num = req.query.number;
-    if (!num) return res.status(400).send({ error: "Missing Number" });
-    
-    process.env.PAIRING_ACTIVE = "true"; // Washa pairing state
+    if (!num) return res.status(400).send({ error: "No number" });
+
     try {
-        const auth = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
-        await auth.clearSession(); // Safisha session ya zamani
+        // Step 1: Force kill any existing connection
+        if (sock) { try { sock.ws.close(); } catch(e){} }
         
+        const auth = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
+        await auth.clearAll(); // Wipe old bad creds
+
         sock = makeWASocket({
             auth: auth.state,
             logger: pino({ level: 'silent' }),
-            browser: Browsers.ubuntu("Chrome") 
+            browser: Browsers.ubuntu("Chrome") // FASTER LINKING
         });
 
         await delay(5000); 
@@ -260,18 +249,17 @@ app.get('/code', async (req, res) => {
 
         sock.ev.on('creds.update', auth.saveCreds);
         sock.ev.on('connection.update', (u) => {
-            if (u.connection === 'open') {
-                delete process.env.PAIRING_ACTIVE;
-                startBot(); 
-            }
+            if (u.connection === 'open') startBot(); 
         });
-    } catch (e) { res.status(500).send({ error: "WhatsApp Busy" }); }
+
+    } catch (e) { res.status(500).send({ error: "System Busy. Refresh and try again." }); }
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => { console.log(`Server Online: ${PORT}`); startBot(); });
 
+// AUTO BIO
 setInterval(async () => {
     if (sock?.user) {
         const uptime = `${Math.floor(process.uptime() / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`;
