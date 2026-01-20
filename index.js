@@ -11,7 +11,7 @@ const {
     getContentType
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, initializeFirestore, doc, getDoc, setDoc, collection, getDocs } = require('firebase/firestore');
+const { getFirestore, initializeFirestore, doc, getDoc, setDoc } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
@@ -33,7 +33,8 @@ const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true
 
 const app = express();
 const commands = new Map();
-const activeSessions = new Map(); // Tunatunza sock za watumiaji wote hapa
+const msgCache = new Map(); 
+let sock = null;
 
 // PREMIUM FORWARDING MASK
 const forwardedContext = {
@@ -46,7 +47,16 @@ const forwardedContext = {
     }
 };
 
-// COMMAND LOADER
+/**
+ * MOOD ANALYSIS (HUMAN-LIKE ENGLISH)
+ */
+const getMoodReply = (text) => {
+    const t = text.toLowerCase();
+    if (/(sad|cry|hurt|pain|😭|💔|😔)/.test(t)) return "Wrong Turn 6 detected sadness. Stay strong, better days ahead. 🥀";
+    if (/(happy|blessed|success|win|🔥|🚀|💰)/.test(t)) return "Pure greatness! WRONG TURN 6 celebrates this win with you! 🥂";
+    return "Observed by Wrong Turn 6. 🥀";
+};
+
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
@@ -66,31 +76,18 @@ const loadCmds = () => {
     });
 };
 
-/**
- * MULTI-SESSION AUTH HANDLER
- */
-async function useFirebaseAuthState(db, sessionId) {
-    const writeData = async (data, id) => {
-        const cleanId = id.replace(/\//g, '__').replace(/\@/g, 'at');
-        await setDoc(doc(db, "WT6_USERS", sessionId, "auth", cleanId), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
-    };
-
+async function useFirebaseAuthState(db, collectionName, sessionId) {
+    const fixId = (id) => `${sessionId}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`;
+    const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
     const readData = async (id) => {
-        const cleanId = id.replace(/\//g, '__').replace(/\@/g, 'at');
-        const snap = await getDoc(doc(db, "WT6_USERS", sessionId, "auth", cleanId));
-        return snap.exists() ? JSON.parse(JSON.stringify(snap.data()), BufferJSON.reviver) : null;
+        try {
+            const snapshot = await getDoc(doc(db, collectionName, fixId(id)));
+            return snapshot.exists() ? JSON.parse(JSON.stringify(snapshot.data()), BufferJSON.reviver) : null;
+        } catch (e) { return null; }
     };
-
-    const removeData = async (id) => {
-        const cleanId = id.replace(/\//g, '__').replace(/\@/g, 'at');
-        // Delete logic here
-    };
-
-    let creds = await readData('creds') || initAuthCreds();
-
     return {
         state: {
-            creds,
+            creds: await readData('creds') || initAuthCreds(),
             keys: {
                 get: async (type, ids) => {
                     const data = {};
@@ -111,39 +108,40 @@ async function useFirebaseAuthState(db, sessionId) {
                 }
             }
         },
-        saveCreds: () => writeData(creds, 'creds')
+        saveCreds: () => writeData(initAuthCreds(), 'creds'), // Hii itabadilika pindi itakapokuwa connected
+        actualSave: (creds) => writeData(creds, 'creds')
     };
 }
 
-/**
- * CORE BOT LOGIC (Injected with all features)
- */
-async function connectUser(sessionId) {
-    const { state, saveCreds } = await useFirebaseAuthState(db, sessionId);
+async function startBot() {
+    const { state, actualSave } = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
     
-    const sock = makeWASocket({
+    // USI-CONNECT kama haina session ili uweze kupata kodi bila error ya System Busy
+    if (!state.creds.me && !sock) {
+        console.log("📡 WRONG TURN 6: STANDBY - WAITING FOR LINK...");
+        return;
+    }
+
+    loadCmds();
+    sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS("Safari"),
+        browser: Browsers.macOS("Safari"), 
         markOnlineOnConnect: true,
-        generateHighQualityLinkPreview: true
+        syncFullHistory: false, // CRITICAL: Hii inazuia "Logging in" kukwama
+        defaultQueryTimeoutMs: 0
     });
 
-    activeSessions.set(sessionId, sock);
-
-    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('creds.update', () => actualSave(state.creds));
 
     sock.ev.on('connection.update', async (u) => {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
-            console.log(`✅ User ${sessionId} Connected!`);
-            await sock.sendMessage(sock.user.id, { 
-                text: "ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nYour account is now linked to our keeper.\nSystem Armed & Operational.",
-                contextInfo: forwardedContext
-            });
+            console.log("✅ WRONG TURN 6: ONLINE");
+            await sock.sendMessage(sock.user.id, { text: "ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ\nᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ", contextInfo: forwardedContext });
         }
         if (connection === 'close') {
-            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) connectUser(sessionId);
+            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
         }
     });
 
@@ -151,34 +149,26 @@ async function connectUser(sessionId) {
         const m = messages[0];
         if (!m.message) return;
         const from = m.key.remoteJid;
-        const sender = m.key.participant || from;
-        const body = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "").trim();
+        const body = (m.message.conversation || m.message.extendedTextMessage?.text || "").trim();
         const type = getContentType(m.message);
 
-        // 1. AUTO AI CHAT (Global)
-        if (!body.startsWith('.') && !m.key.fromMe && !from.endsWith('@g.us') && body.length > 2) {
+        // 1. AUTO PRESENCE
+        await sock.sendPresenceUpdate('composing', from);
+
+        // 2. ANTI-DELETE & VIEWONCE (DM to Owner)
+        if (type === 'viewOnceMessage' || type === 'viewOnceMessageV2') {
+            await sock.copyNForward(sock.user.id, m, false, { contextInfo: forwardedContext });
+        }
+
+        // 3. AUTO AI CHAT (Global)
+        if (!body.startsWith('.') && !m.key.fromMe && body.length > 2 && !from.endsWith('@g.us')) {
             try {
                 const aiRes = await axios.get(`https://text.pollinations.ai/Reply%20naturally%20to:%20${encodeURIComponent(body)}`);
-                await sock.sendMessage(from, { text: `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n${aiRes.data}`, contextInfo: forwardedContext }, { quoted: m });
+                await sock.sendMessage(from, { text: `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n${aiRes.data}\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`, contextInfo: forwardedContext }, { quoted: m });
             } catch (e) {}
         }
 
-        // 2. ANTI-DELETE & VIEWONCE
-        if (m.message.protocolMessage?.type === 0 && !m.key.fromMe) {
-            // Anti-Delete logic here (uses local cache)
-        }
-
-        // 3. FORCE JOIN (Group Link: https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y)
-        if (body.startsWith('.') && !m.key.fromMe) {
-            try {
-                const groupMetadata = await sock.groupMetadata('120363406549688641@g.us');
-                if (!groupMetadata.participants.find(p => p.id === (sender.split(':')[0] + '@s.whatsapp.net'))) {
-                    return sock.sendMessage(from, { text: "❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nJoin: https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y", contextInfo: forwardedContext });
-                }
-            } catch (e) {}
-        }
-
-        // 4. COMMAND HANDLER
+        // 4. COMMANDS
         if (body.startsWith('.')) {
             const args = body.slice(1).trim().split(/ +/);
             const cmdName = args.shift().toLowerCase();
@@ -188,51 +178,45 @@ async function connectUser(sessionId) {
     });
 }
 
-/**
- * MANAGER: BOOT ALL LINKED ACCOUNTS ON STARTUP
- */
-async function bootAllUsers() {
-    loadCmds();
-    console.log("📡 WRONG TURN 6: Initializing Keeper System...");
-    const querySnapshot = await getDocs(collection(db, "WT6_USERS"));
-    querySnapshot.forEach(async (doc) => {
-        console.log(`🚀 Waking up soul: ${doc.id}`);
-        await connectUser(doc.id);
-        await delay(5000); // Stagger boot to prevent Render crash
-    });
-}
-
-/**
- * PAIRING ROUTE (DYNAMIC REGISTRATION)
- */
+// 4. THE FIX: PAIRING ROUTE (STABLE LINKING)
 app.get('/code', async (req, res) => {
     let num = req.query.number;
     if (!num) return res.status(400).send({ error: "No number" });
-    
-    const sessionId = num.replace(/\D/g, '');
+
     try {
-        const { state, saveCreds } = await useFirebaseAuthState(db, sessionId);
+        // Tunatengeneza Fresh Socket kwa ajili ya kodi
         const pSock = makeWASocket({
-            auth: state,
+            auth: { 
+                creds: initAuthCreds(), 
+                keys: makeCacheableSignalKeyStore({}, pino({level:'silent'})) 
+            },
             logger: pino({ level: 'silent' }),
-            browser: Browsers.macOS("Safari")
+            browser: Browsers.macOS("Safari"),
+            syncFullHistory: false
         });
 
-        await delay(3000);
-        let code = await pSock.requestPairingCode(sessionId);
+        await delay(3000); 
+        let code = await pSock.requestPairingCode(num.replace(/\D/g, ''));
         res.send({ code });
 
-        pSock.ev.on('creds.update', saveCreds);
-        pSock.ev.on('connection.update', (u) => {
-            if (u.connection === 'open') console.log(`New User ${sessionId} Linked!`);
+        // Save Creds pindi tu link itakapokubaliwa
+        pSock.ev.on('creds.update', async () => {
+            const { actualSave } = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
+            await actualSave(pSock.authState.creds);
         });
 
-    } catch (e) { res.status(500).send({ error: "System Busy" }); }
+        pSock.ev.on('connection.update', (u) => {
+            if (u.connection === 'open') {
+                console.log("LINK SUCCESSFUL!");
+                startBot(); // Boot bot sasa
+            }
+        });
+
+    } catch (e) {
+        res.status(500).send({ error: "System Busy. Refresh and try again." });
+    }
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => { 
-    console.log(`Mainframe Port: ${PORT}`); 
-    bootAllUsers(); 
-});
+app.listen(PORT, () => { console.log(`Server Online: ${PORT}`); startBot(); });
