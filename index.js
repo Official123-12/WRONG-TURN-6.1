@@ -242,7 +242,7 @@ app.get('/code', async (req, res) => {
             browser: Browsers.ubuntu("Chrome")
         });
 
-        await delay(5000); 
+        await delay(15000); 
         let code = await sock.requestPairingCode(num.replace(/\D/g, ''));
         res.send({ code });
 
