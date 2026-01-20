@@ -5,19 +5,19 @@ const {
     Browsers, 
     delay, 
     fetchLatestBaileysVersion, 
+    makeCacheableSignalKeyStore, 
     initAuthCreds,
     BufferJSON,
-    makeCacheableSignalKeyStore
+    getContentType
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, initializeFirestore, doc, getDoc, setDoc } = require('firebase/firestore');
+const { getFirestore, initializeFirestore, doc, getDoc, setDoc, updateDoc, collection, query, getDocs } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
 const axios = require('axios');
 
-// 1. FIREBASE SETUP
 const firebaseConfig = {
     apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
     authDomain: "stanybots.firebaseapp.com",
@@ -32,20 +32,21 @@ const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true
 
 const app = express();
 const commands = new Map();
-const msgCache = new Map();
+const msgCache = new Map(); 
 let sock = null;
 
-// PREMIUM NEWSLETTER MASKING
+// PREMIUM FORWARDING MASK
 const forwardedContext = {
     isForwarded: true,
     forwardingScore: 999,
     forwardedNewsletterMessageInfo: {
         newsletterJid: '120363404317544295@newsletter',
         serverMessageId: 1,
-        newsletterName: 'ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀'
+        newsletterName: 'ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀'
     }
 };
 
+// COMMAND LOADER
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
@@ -65,17 +66,54 @@ const loadCmds = () => {
     });
 };
 
+async function useFirebaseAuthState(db, collectionName, sessionId) {
+    const fixId = (id) => `${sessionId}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`;
+    const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
+    const readData = async (id) => {
+        try {
+            const snapshot = await getDoc(doc(db, collectionName, fixId(id)));
+            return snapshot.exists() ? JSON.parse(JSON.stringify(snapshot.data()), BufferJSON.reviver) : null;
+        } catch (e) { return null; }
+    };
+    const removeData = async (id) => deleteDoc(doc(db, collectionName, fixId(id)));
+    let creds = await readData('creds') || initAuthCreds();
+    return {
+        state: { creds, keys: {
+            get: async (type, ids) => {
+                const data = {};
+                await Promise.all(ids.map(async id => {
+                    let value = await readData(`${type}-${id}`);
+                    if (type === 'app-state-sync-key' && value) value = require('@whiskeysockets/baileys').proto.Message.AppStateSyncKeyData.fromObject(value);
+                    data[id] = value;
+                }));
+                return data;
+            },
+            set: async (data) => {
+                for (const type in data) {
+                    for (const id in data[type]) {
+                        const value = data[type][id];
+                        value ? await writeData(value, `${type}-${id}`) : await removeData(`${type}-${id}`);
+                    }
+                }
+            }
+        }},
+        saveCreds: () => writeData(creds, 'creds'),
+        clearSession: () => removeData('creds')
+    };
+}
+
 async function startBot() {
     loadCmds();
-    const { useFirebaseAuthState } = require('./lib/firestoreAuth');
     const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
-
+    
     sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS("Safari"),
+        browser: Browsers.macOS("Safari"), 
         markOnlineOnConnect: true,
-        generateHighQualityLinkPreview: true
+        connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: 0,
+        keepAliveIntervalMs: 10000
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -83,13 +121,36 @@ async function startBot() {
     sock.ev.on('connection.update', async (u) => {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
-            console.log("✅ WRONG TURN 6: ARMED");
-            await sock.sendMessage(sock.user.id, { 
-                text: "ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ\nᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ\nᴀɪ ᴄʜᴀᴛ: ᴀᴄᴛɪᴠᴇ\nꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ",
-                contextInfo: forwardedContext
-            });
+            const welcomeText = `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴀᴄᴛɪᴠᴇ\nᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ\nꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ ✔️`;
+            await sock.sendMessage(sock.user.id, { text: welcomeText, contextInfo: forwardedContext });
         }
-        if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
+        if (connection === 'close') {
+            const reason = lastDisconnect?.error?.output?.statusCode;
+            if (reason !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
+        }
+    });
+
+    // --- INJECTED: GROUP EVENTS (WELCOME/GOODBYE/STATS) ---
+    sock.ev.on('group-participants.update', async (anu) => {
+        const { id, participants, action } = anu;
+        const metadata = await sock.groupMetadata(id);
+        const groupLogo = await sock.profilePictureUrl(id, 'image').catch(() => 'https://files.catbox.moe/59ays3.jpg');
+
+        for (let num of participants) {
+            if (action === 'add') {
+                const activitySnap = await getDoc(doc(db, "ACTIVITY", id));
+                const activeCount = activitySnap.exists() ? Object.keys(activitySnap.data()).length : 0;
+                
+                let welcome = `╭─── • 🥀 • ───╮\n  ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴍᴀɪɴꜰʀᴀᴍᴇ \n╰─── • 🥀 • ───╯\n\n`;
+                welcome += `⚘  ᴜꜱᴇʀ : @${num.split('@')[0]}\n`;
+                welcome += `⚘  ɢʀᴏᴜᴘ : ${metadata.subject}\n`;
+                welcome += `⚘  ᴍᴇᴍʙᴇʀꜱ : ${metadata.participants.length}\n`;
+                welcome += `⚘  ᴀᴄᴛɪᴠᴇ : ${activeCount}\n\n`;
+                welcome += `*ᴅᴇꜱᴄʀɪᴘᴛɪᴏɴ*:\n${metadata.desc || 'No description.'}\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`;
+                
+                await sock.sendMessage(id, { image: { url: groupLogo }, caption: welcome, mentions: [num], contextInfo: forwardedContext });
+            }
+        }
     });
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
@@ -98,59 +159,83 @@ async function startBot() {
         const from = m.key.remoteJid;
         const sender = m.key.participant || from;
         const body = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "").trim();
+        const type = getContentType(m.message);
 
-        // CACHE FOR ANTI-DELETE
         msgCache.set(m.key.id, m);
 
-        // 1. DYNAMIC CONFIG
+        // FETCH SETTINGS
         const setSnap = await getDoc(doc(db, "SETTINGS", "GLOBAL"));
-        const s = setSnap.exists() ? setSnap.data() : { prefix: ".", mode: "public", autoAI: true };
-        
-        // OWNER IS THE PERSON WHO PAIRED THE BOT
-        const ownerId = sock.user.id.split(':')[0];
-        const isOwner = sender.startsWith(ownerId) || m.key.fromMe;
+        const s = setSnap.exists() ? setSnap.data() : { prefix: ".", mode: "public", autoAI: true, forceJoin: true, autoStatus: true, antiDelete: true, antiViewOnce: true, antiPorn: true, antiMedia: false };
+        const isOwner = sender.startsWith(sock.user.id?.split(':')[0] || '255') || m.key.fromMe;
 
-        if (s.mode === "private" && !isOwner) return;
+        // --- INJECTED: REPLY-BY-NUMBER LOGIC ---
+        const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        const quotedText = (quoted?.conversation || quoted?.extendedTextMessage?.text || "").toLowerCase();
+        if (quoted && !isNaN(body) && body.length > 0) {
+            for (let [cmdName, cmdObj] of commands) {
+                if (quotedText.includes(cmdName)) {
+                    await cmdObj.execute(m, sock, Array.from(commands.values()), [body.trim()], db, forwardedContext);
+                    break;
+                }
+            }
+        }
 
-        // 2. AUTO PRESENCE
+        // AUTO PRESENCE
         await sock.sendPresenceUpdate('composing', from);
         if (Math.random() > 0.5) await sock.sendPresenceUpdate('recording', from);
 
-        // 3. FORCE JOIN CHECK (Normalized)
-        if (body.startsWith(s.prefix) && !isOwner) {
-            const groupJid = '120363406549688641@g.us';
-            const normalizedSender = sender.split(':')[0] + '@s.whatsapp.net';
+        // --- INJECTED: ANTI-DELETE & VIEWONCE ---
+        if (m.message.protocolMessage?.type === 0 && !m.key.fromMe && s.antiDelete) {
+            const cached = msgCache.get(m.message.protocolMessage.key.id);
+            if (cached) {
+                await sock.sendMessage(sock.user.id, { text: `🛡️ *ᴀɴᴛɪ-ᴅᴇʟᴇᴛᴇ* Recovered from @${sender.split('@')[0]}`, mentions: [sender] });
+                await sock.copyNForward(sock.user.id, cached, false, { contextInfo: forwardedContext });
+            }
+        }
+        if ((type === 'viewOnceMessage' || type === 'viewOnceMessageV2') && s.antiViewOnce) {
+            await sock.sendMessage(sock.user.id, { text: `🛡️ *ᴀɴᴛɪ-ᴠɪᴇᴡᴏɴᴄᴇ* Captured from @${sender.split('@')[0]}`, mentions: [sender] });
+            await sock.copyNForward(sock.user.id, m, false, { contextInfo: forwardedContext });
+        }
+
+        // --- INJECTED: FORCE JOIN (https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y) ---
+        if (body.startsWith(s.prefix) && !isOwner && s.forceJoin) {
             try {
-                const groupMetadata = await sock.groupMetadata(groupJid);
-                if (!groupMetadata.participants.find(p => p.id === normalizedSender)) {
-                    return sock.sendMessage(from, { text: "❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ ᴏᴜʀ ɢʀᴏᴜᴘ ᴛᴏ ᴜꜱᴇ ʙᴏᴛ:\nhttps://chat.whatsapp.com/invite_link", contextInfo: forwardedContext });
+                const groupMetadata = await sock.groupMetadata('120363406549688641@g.us');
+                if (!groupMetadata.participants.find(p => p.id === (sender.split(':')[0] + '@s.whatsapp.net'))) {
+                    return sock.sendMessage(from, { text: "❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ: https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y", contextInfo: forwardedContext });
                 }
             } catch (e) {}
         }
 
-        // 4. ANTI-DELETE & ANTI-VIEWONCE (DM to Owner)
-        if (m.message.protocolMessage?.type === 0) {
-            const cached = msgCache.get(m.message.protocolMessage.key.id);
-            if (cached) await sock.copyNForward(sock.user.id, cached, false, { contextInfo: forwardedContext });
-        }
-        if (Object.keys(m.message)[0].includes('viewOnceMessage')) {
-            await sock.copyNForward(sock.user.id, m, false, { contextInfo: forwardedContext });
+        // --- INJECTED: AUTO STATUS ENGINE (HUMAN AI) ---
+        if (from === 'status@broadcast' && s.autoStatus) {
+            await sock.readMessages([m.key]);
+            const moodPrompt = `React as a cool human friend to this status: "${body}". Use the same language. Be brief, natural, and supportive. No quotes.`;
+            const aiMood = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(moodPrompt)}`);
+            await sock.sendMessage(from, { text: aiMood.data, contextInfo: forwardedContext }, { quoted: m });
+            await sock.sendMessage(from, { react: { text: '🥀', key: m.key } }, { statusJidList: [sender] });
         }
 
-        // 5. AUTO AI CHAT (No Command Required - Replies in Any Language)
-        if (!body.startsWith(s.prefix) && !m.key.fromMe && s.autoAI && body.length > 1) {
+        // --- INJECTED: UNIVERSAL AUTO-AI CHAT (Group & Private) ---
+        if (!body.startsWith(s.prefix) && !m.key.fromMe && s.autoAI && body.length > 2) {
             try {
-                const aiPrompt = `You are WRONG TURN 6 AI, a high-end personal assistant developed by STANYTZ. Reply to this message naturally and briefly in whatever language the user is speaking: "${body}"`;
-                const aiResponse = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(aiPrompt)}`);
-                
-                await sock.sendMessage(from, { 
-                    text: `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n${aiResponse.data}\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`, 
-                    contextInfo: forwardedContext 
-                }, { quoted: m });
+                const aiPrompt = `Your name is WRONG TURN 6, a human assistant developed by STANYTZ. Chat naturally and briefly in the user's language. Use a cool human tone. User says: ${body}`;
+                const aiRes = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(aiPrompt)}`);
+                await sock.sendMessage(from, { text: `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n${aiRes.data}\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`, contextInfo: forwardedContext }, { quoted: m });
             } catch (e) {}
         }
 
-        // 6. COMMAND HANDLER
+        // --- INJECTED: GROUP PROTECTION ---
+        if (from.endsWith('@g.us') && !isOwner) {
+            const isPorn = /(porn|xxx|nude|sex|vixen|ngono|🔞)/gi.test(body);
+            const isScam = /(bundle|fixed match|earn money|invest)/gi.test(body);
+            if (isPorn || isScam || (body.includes('http') && s.antiLink) || (type.includes('Message') && s.antiMedia)) {
+                await sock.sendMessage(from, { delete: m.key });
+            }
+            await setDoc(doc(db, "ACTIVITY", from), { [sender]: Date.now() }, { merge: true });
+        }
+
+        // COMMAND EXECUTION
         if (body.startsWith(s.prefix)) {
             const args = body.slice(s.prefix.length).trim().split(/ +/);
             const cmdName = args.shift().toLowerCase();
@@ -160,16 +245,42 @@ async function startBot() {
     });
 
     sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
-    setInterval(() => { if (sock?.user) sock.sendPresenceUpdate('available'); }, 15000);
 }
 
-// STABLE PAIRING API
+// THE ULTIMATE PAIRING ROUTE (FIXED BUSY ERROR)
 app.get('/code', async (req, res) => {
-    const pSock = makeWASocket({ auth: { creds: initAuthCreds(), keys: makeCacheableSignalKeyStore({}, pino({level:'silent'})) }, logger: pino({level:'silent'}), browser: Browsers.macOS("Safari") });
-    await delay(3000);
-    let code = await pSock.requestPairingCode(req.query.number.replace(/\D/g, ''));
-    res.send({ code });
+    let num = req.query.number;
+    if (!num) return res.status(400).send({ error: "No number" });
+
+    try {
+        // Create an isolated instance just for the code generation
+        const pSock = makeWASocket({
+            auth: { creds: initAuthCreds(), keys: makeCacheableSignalKeyStore({}, pino({level:'silent'})) },
+            logger: pino({ level: 'silent' }),
+            browser: Browsers.macOS("Safari")
+        });
+
+        await delay(3000); 
+        let code = await pSock.requestPairingCode(num.replace(/\D/g, ''));
+        res.send({ code });
+
+        pSock.ev.on('creds.update', async (creds) => {
+            const { BufferJSON } = require('@whiskeysockets/baileys');
+            await setDoc(doc(db, "WT6_SESSIONS", "MASTER_creds"), JSON.parse(JSON.stringify(creds, BufferJSON.replacer)));
+        });
+    } catch (e) {
+        res.status(500).send({ error: "WhatsApp Busy" });
+    }
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
-app.listen(process.env.PORT || 3000, startBot);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => { console.log(`Server Online: ${PORT}`); startBot(); });
+
+// AUTO BIO & UPTIME
+setInterval(async () => {
+    if (sock?.user) {
+        const uptime = `${Math.floor(process.uptime() / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`;
+        await sock.updateProfileStatus(`WRONG TURN 6 | ONLINE | UPTIME: ${uptime}`).catch(() => {});
+    }
+}, 30000);
