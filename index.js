@@ -19,7 +19,7 @@ const {
 
 const { initializeApp } = require('firebase/app')
 const {
-  initializeFirestore,
+  getFirestore,
   doc,
   getDoc,
   setDoc,
@@ -43,10 +43,7 @@ const firebaseConfig = {
 }
 
 const firebaseApp = initializeApp(firebaseConfig)
-const db = initializeFirestore(firebaseApp, {
-  experimentalForceLongPolling: true,
-  useFetchStreams: false
-})
+const db = getFirestore(firebaseApp)
 
 // ================= EXPRESS =================
 const app = express()
@@ -100,7 +97,8 @@ async function useFirebaseAuthState (collectionName, sessionId) {
   const writeData = async (data, id) =>
     setDoc(
       doc(db, collectionName, fixId(id)),
-      JSON.parse(JSON.stringify(data, BufferJSON.replacer))
+      JSON.parse(JSON.stringify(data, BufferJSON.replacer)),
+      { merge: true }
     )
 
   const readData = async (id) => {
@@ -154,7 +152,7 @@ async function startBot () {
   const { state, saveCreds } =
     await useFirebaseAuthState('WT6_SESSIONS', 'MASTER')
 
-  // Don’t auto-connect without creds (prevents 428)
+  // Don't auto-connect without creds (prevents 428)
   if (!state.creds.registered && !sock) {
     console.log('📡 WAITING FOR PAIRING...')
     return
@@ -242,115 +240,6 @@ async function startBot () {
     }
   })
 
-  // ===== ACTIVE MEMBERS TRACKER =====
-if (from.endsWith('@g.us')) {
-  await setDoc(
-    doc(db, "ACTIVITY", from),
-    { [sender]: Date.now() },
-    { merge: true }
-  );
-}
-
-  // ===== SHOW ACTIVE MEMBERS =====
-if (body === `${s.prefix}active` && from.endsWith('@g.us')) {
-  const snap = await getDoc(doc(db, "ACTIVITY", from));
-  if (!snap.exists()) {
-    return sock.sendMessage(from, { text: 'No activity yet.' });
-  }
-
-  const data = snap.data();
-  const now = Date.now();
-  let list = `🥀 *ACTIVE MEMBERS (24H)*\n\n`;
-  let count = 0;
-
-  for (let user in data) {
-    if (now - data[user] < 24 * 60 * 60 * 1000) {
-      list += `• @${user.split('@')[0]}\n`;
-      count++;
-    }
-  }
-
-  list += `\nTotal Active: ${count}`;
-  await sock.sendMessage(from, {
-    text: list,
-    mentions: Object.keys(data),
-    contextInfo: forwardedContext
-  });
-}
-
-  // ===== AUTO KICK INACTIVE (7 DAYS) =====
-const INACTIVE_DAYS = 7;
-
-if (body === `${s.prefix}clean` && from.endsWith('@g.us') && isOwner) {
-  const snap = await getDoc(doc(db, "ACTIVITY", from));
-  if (!snap.exists()) return;
-
-  const data = snap.data();
-  const now = Date.now();
-  const remove = [];
-
-  for (let user in data) {
-    if (now - data[user] > INACTIVE_DAYS * 24 * 60 * 60 * 1000) {
-      remove.push(user);
-    }
-  }
-
-  if (remove.length === 0) {
-    return sock.sendMessage(from, { text: '✅ No inactive members.' });
-  }
-
-  await sock.groupParticipantsUpdate(from, remove, 'remove');
-  await sock.sendMessage(from, {
-    text: `🧹 Removed ${remove.length} inactive members`,
-    contextInfo: forwardedContext
-  });
-}
-
-  // ===== PAYMENT TEMPLATE =====
-if (body === `${s.prefix}pay`) {
-  const payText = `
-💳 *WRONG TURN 6 PREMIUM*
-━━━━━━━━━━━━━━
-📌 User: @${sender.split('@')[0]}
-💰 Amount: 5 USD
-📆 Duration: 30 Days
-
-📲 Pay via:
-• Mobile Money
-• Crypto
-• PayPal
-
-📞 Contact Admin
-`;
-  await sock.sendMessage(from, {
-    text: payText,
-    mentions: [sender],
-    contextInfo: forwardedContext
-  });
-}
-
-  // ===== REFERRAL =====
-if (body.startsWith(`${s.prefix}ref`)) {
-  const ref = body.split(' ')[1];
-  if (!ref) {
-    return sock.sendMessage(from, {
-      text: `🔗 Your referral code:\n.ref ${sender}`,
-      contextInfo: forwardedContext
-    });
-  }
-
-  await setDoc(
-    doc(db, "REFERRALS", ref),
-    { [sender]: true },
-    { merge: true }
-  );
-
-  await sock.sendMessage(from, {
-    text: '✅ Referral recorded',
-    contextInfo: forwardedContext
-  });
-}
-
   // ===== AUTO BIO =====
 setInterval(async () => {
   if (!sock?.user) return;
@@ -426,7 +315,7 @@ setInterval(async () => {
     if (!m.key.fromMe && body.length > 2 && !body.startsWith('.')) {
       try {
         const ai = await axios.get(
-          `https://text.pollinations.ai/Reply%20in%20the%20same%20language%and%like%20areal%20people%20as%20user:%20${encodeURIComponent(body)}`
+          `https://text.pollinations.ai/Reply%20in%20the%20same%20language%20and%20like%20a%20real%20person%20to:%20${encodeURIComponent(body)}`
         )
         await sock.sendMessage(
           from,
@@ -435,6 +324,118 @@ setInterval(async () => {
         )
       } catch {}
     }
+
+    // ===== ACTIVE MEMBERS TRACKER =====
+if (from.endsWith('@g.us')) {
+  await setDoc(
+    doc(db, "ACTIVITY", from),
+    { [sender]: Date.now() },
+    { merge: true }
+  );
+}
+
+    // ===== SHOW ACTIVE MEMBERS =====
+if (body === '.active' && from.endsWith('@g.us')) {
+  const snap = await getDoc(doc(db, "ACTIVITY", from));
+  if (!snap.exists()) {
+    return sock.sendMessage(from, { text: 'No activity yet.' });
+  }
+
+  const data = snap.data();
+  const now = Date.now();
+  let list = `🥀 *ACTIVE MEMBERS (24H)*\n\n`;
+  let count = 0;
+  const mentions = [];
+
+  for (let user in data) {
+    if (now - data[user] < 24 * 60 * 60 * 1000) {
+      list += `• @${user.split('@')[0]}\n`;
+      count++;
+      mentions.push(user);
+    }
+  }
+
+  list += `\nTotal Active: ${count}`;
+  await sock.sendMessage(from, {
+    text: list,
+    mentions: mentions,
+    contextInfo: forwardedContext
+  });
+}
+
+  // ===== AUTO KICK INACTIVE (7 DAYS) =====
+const INACTIVE_DAYS = 7;
+const isOwner = sender === sock.user.id;
+
+if (body === '.clean' && from.endsWith('@g.us') && isOwner) {
+  const snap = await getDoc(doc(db, "ACTIVITY", from));
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  const now = Date.now();
+  const remove = [];
+
+  for (let user in data) {
+    if (now - data[user] > INACTIVE_DAYS * 24 * 60 * 60 * 1000) {
+      remove.push(user);
+    }
+  }
+
+  if (remove.length === 0) {
+    return sock.sendMessage(from, { text: '✅ No inactive members.' });
+  }
+
+  await sock.groupParticipantsUpdate(from, remove, 'remove');
+  await sock.sendMessage(from, {
+    text: `🧹 Removed ${remove.length} inactive members`,
+    contextInfo: forwardedContext
+  });
+}
+
+  // ===== PAYMENT TEMPLATE =====
+if (body === '.pay') {
+  const payText = `
+💳 *WRONG TURN 6 PREMIUM*
+━━━━━━━━━━━━━━
+📌 User: @${sender.split('@')[0]}
+💰 Amount: 5 USD
+📆 Duration: 30 Days
+
+📲 Pay via:
+• Mobile Money
+• Crypto
+• PayPal
+
+📞 Contact Admin
+`;
+  await sock.sendMessage(from, {
+    text: payText,
+    mentions: [sender],
+    contextInfo: forwardedContext
+  });
+}
+
+  // ===== REFERRAL =====
+if (body.startsWith('.ref')) {
+  const ref = body.split(' ')[1];
+  if (!ref) {
+    return sock.sendMessage(from, {
+      text: `🔗 Your referral code:\n.ref ${sender}`,
+      contextInfo: forwardedContext
+    });
+  }
+
+  await setDoc(
+    doc(db, "REFERRALS", ref),
+    { [sender]: true },
+    { merge: true }
+  );
+
+  await sock.sendMessage(from, {
+    text: '✅ Referral recorded',
+    contextInfo: forwardedContext
+  });
+}
 
     // ===== COMMAND HANDLER =====
     if (body.startsWith('.')) {
@@ -456,7 +457,7 @@ app.get('/code', async (req, res) => {
   try {
     const auth = await useFirebaseAuthState('WT6_SESSIONS', 'MASTER')
 
-    sock = makeWASocket({
+    const tempSock = makeWASocket({
       auth: {
         creds: initAuthCreds(),
         keys: makeCacheableSignalKeyStore({}, pino({ level: 'silent' }))
@@ -465,13 +466,16 @@ app.get('/code', async (req, res) => {
       browser: Browsers.ubuntu('Chrome')
     })
 
-    await delay(5000)
-    const code = await sock.requestPairingCode(number.replace(/\D/g, ''))
+    await delay(3000)
+    const code = await tempSock.requestPairingCode(number.replace(/\D/g, ''))
     res.json({ code })
 
-    sock.ev.on('creds.update', auth.saveCreds)
-    sock.ev.on('connection.update', (u) => {
-      if (u.connection === 'open') startBot()
+    tempSock.ev.on('creds.update', auth.saveCreds)
+    tempSock.ev.on('connection.update', (u) => {
+      if (u.connection === 'open') {
+        tempSock.end()
+        startBot()
+      }
     })
   } catch (e) {
     res.status(500).json({ error: 'Pairing failed, refresh.' })
