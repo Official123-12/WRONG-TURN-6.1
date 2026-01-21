@@ -1,24 +1,38 @@
+/**
+ * WRONG TURN 6
+ * Developer: STANYTZ
+ * Single-file index.js (Firebase + Baileys + Pairing Code)
+ */
+
 require('dotenv').config()
+
 const {
   default: makeWASocket,
   DisconnectReason,
   Browsers,
   delay,
-  makeCacheableSignalKeyStore,
   initAuthCreds,
   BufferJSON,
-  getContentType
+  getContentType,
+  makeCacheableSignalKeyStore
 } = require('@whiskeysockets/baileys')
 
 const { initializeApp } = require('firebase/app')
-const { initializeFirestore, doc, getDoc, setDoc } = require('firebase/firestore')
+const {
+  initializeFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc
+} = require('firebase/firestore')
+
 const express = require('express')
 const path = require('path')
 const fs = require('fs-extra')
 const pino = require('pino')
 const axios = require('axios')
 
-/* ================= FIREBASE ================= */
+// ================= FIREBASE =================
 const firebaseConfig = {
   apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
   authDomain: "stanybots.firebaseapp.com",
@@ -34,59 +48,64 @@ const db = initializeFirestore(firebaseApp, {
   useFetchStreams: false
 })
 
-/* ================= GLOBALS ================= */
+// ================= EXPRESS =================
 const app = express()
+
+// ================= GLOBALS =================
+let sock = null
 const commands = new Map()
 const msgCache = new Map()
-let sock = null
-let isPairing = false
 
-/* ================= FORWARDED CONTEXT ================= */
+// ===== Forwarded / Channel Mask =====
 const forwardedContext = {
   isForwarded: true,
   forwardingScore: 999,
   forwardedNewsletterMessageInfo: {
     newsletterJid: '120363404317544295@newsletter',
     serverMessageId: 1,
-    newsletterName: 'ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀'
+    newsletterName: 'ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀'
   }
 }
 
-/* ================= COMMAND LOADER ================= */
+// ================= COMMAND LOADER =================
 function loadCmds () {
-  const cmdPath = path.join(__dirname, 'commands')
-  if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath)
+  const base = path.join(__dirname, 'commands')
+  if (!fs.existsSync(base)) fs.mkdirSync(base)
 
-  for (const folder of fs.readdirSync(cmdPath)) {
-    const folderPath = path.join(cmdPath, folder)
-    if (!fs.lstatSync(folderPath).isDirectory()) continue
+  fs.readdirSync(base).forEach(folder => {
+    const dir = path.join(base, folder)
+    if (!fs.lstatSync(dir).isDirectory()) return
 
-    for (const file of fs.readdirSync(folderPath).filter(f => f.endsWith('.js'))) {
-      try {
-        const cmd = require(path.join(folderPath, file))
-        if (cmd?.name) {
-          cmd.category = folder
-          commands.set(cmd.name.toLowerCase(), cmd)
+    fs.readdirSync(dir)
+      .filter(f => f.endsWith('.js'))
+      .forEach(file => {
+        try {
+          const cmd = require(path.join(dir, file))
+          if (cmd?.name) {
+            cmd.category = folder
+            commands.set(cmd.name.toLowerCase(), cmd)
+          }
+        } catch (e) {
+          console.log('CMD LOAD ERROR:', e.message)
         }
-      } catch {}
-    }
-  }
+      })
+  })
 }
 
-/* ================= FIREBASE AUTH STATE ================= */
-async function useFirebaseAuthState (collection, sessionId) {
-  const fixId = id =>
+// ================= FIREBASE AUTH STATE =================
+async function useFirebaseAuthState (collectionName, sessionId) {
+  const fixId = (id) =>
     `${sessionId}_${id.replace(/\//g, '__').replace(/@/g, 'at')}`
 
   const writeData = async (data, id) =>
     setDoc(
-      doc(db, collection, fixId(id)),
+      doc(db, collectionName, fixId(id)),
       JSON.parse(JSON.stringify(data, BufferJSON.replacer))
     )
 
-  const readData = async id => {
+  const readData = async (id) => {
     try {
-      const snap = await getDoc(doc(db, collection, fixId(id)))
+      const snap = await getDoc(doc(db, collectionName, fixId(id)))
       return snap.exists()
         ? JSON.parse(JSON.stringify(snap.data()), BufferJSON.reviver)
         : null
@@ -95,122 +114,171 @@ async function useFirebaseAuthState (collection, sessionId) {
     }
   }
 
-  const creds = (await readData('creds')) || initAuthCreds()
+  const removeData = async (id) =>
+    deleteDoc(doc(db, collectionName, fixId(id)))
+
+  let creds = (await readData('creds')) || initAuthCreds()
 
   return {
     state: {
       creds,
       keys: {
         get: async (type, ids) => {
-          const data = {}
-          for (const id of ids) {
-            let value = await readData(`${type}-${id}`)
-            if (
-              type === 'app-state-sync-key' &&
-              value
-            ) {
-              value =
-                require('@whiskeysockets/baileys').proto.Message
-                  .AppStateSyncKeyData.fromObject(value)
-            }
-            data[id] = value
-          }
-          return data
+          const out = {}
+          await Promise.all(
+            ids.map(async (id) => {
+              out[id] = await readData(`${type}-${id}`)
+            })
+          )
+          return out
         },
-        set: async data => {
+        set: async (data) => {
           for (const type in data) {
             for (const id in data[type]) {
-              const value = data[type][id]
-              if (value) await writeData(value, `${type}-${id}`)
+              const v = data[type][id]
+              if (v) await writeData(v, `${type}-${id}`)
+              else await removeData(`${type}-${id}`)
             }
           }
         }
       }
     },
-    saveCreds: () => writeData(creds, 'creds')
+    saveCreds: async () => writeData(creds, 'creds')
   }
 }
 
-/* ================= MAIN BOT ================= */
+// ================= START BOT =================
 async function startBot () {
-  if (sock || isPairing) return
-
   loadCmds()
-  const { state, saveCreds } = await useFirebaseAuthState(
-    'WT6_SESSIONS',
-    'MASTER'
-  )
+
+  const { state, saveCreds } =
+    await useFirebaseAuthState('WT6_SESSIONS', 'MASTER')
+
+  // Don’t auto-connect without creds (prevents 428)
+  if (!state.creds.registered && !sock) {
+    console.log('📡 WAITING FOR PAIRING...')
+    return
+  }
 
   sock = makeWASocket({
-    auth: state,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
+    },
     logger: pino({ level: 'silent' }),
     browser: Browsers.ubuntu('Chrome'),
     markOnlineOnConnect: true,
-    generateHighQualityLinkPreview: true
+    generateHighQualityLinkPreview: true,
+    connectTimeoutMs: 60000,
+    keepAliveIntervalMs: 10000
   })
 
   sock.ev.on('creds.update', saveCreds)
 
-  sock.ev.on('connection.update', u => {
-    if (u.connection === 'open') {
-      sock.sendMessage(sock.user.id, {
-        text:
-          'ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\n' +
-          'ꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ\n' +
-          'ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ\n' +
-          'ꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ ✔️',
-        contextInfo: forwardedContext
-      })
+  // ========== CONNECTION ==========
+  sock.ev.on('connection.update', async (u) => {
+    const { connection, lastDisconnect } = u
+    if (connection === 'open') {
+      console.log('✅ WRONG TURN 6 ONLINE')
+      await sock.sendMessage(
+        sock.user.id,
+        {
+          text:
+            'ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n' +
+            'System armed & operational\n' +
+            'Developer: STANYTZ\n' +
+            'Status: ONLINE ✔️',
+          contextInfo: forwardedContext
+        }
+      )
     }
 
-    if (
-      u.connection === 'close' &&
-      u.lastDisconnect?.error?.output?.statusCode !==
-        DisconnectReason.loggedOut
-    ) {
-      sock = null
-      setTimeout(startBot, 5000)
+    if (connection === 'close') {
+      const reason = lastDisconnect?.error?.output?.statusCode
+      if (reason !== DisconnectReason.loggedOut) {
+        setTimeout(startBot, 5000)
+      }
     }
   })
 
-  /* ================= MESSAGES ================= */
+  // ========== GROUP WELCOME / GOODBYE ==========
+  sock.ev.on('group-participants.update', async (anu) => {
+    const { id, participants, action } = anu
+    let meta
+    try {
+      meta = await sock.groupMetadata(id)
+    } catch {
+      return
+    }
+
+    const pic = await sock
+      .profilePictureUrl(id, 'image')
+      .catch(() => null)
+
+    for (const user of participants) {
+      if (action === 'add') {
+        const text =
+          `🥀 WELCOME 🥀\n\n` +
+          `User: @${user.split('@')[0]}\n` +
+          `Group: ${meta.subject}\n` +
+          `Members: ${meta.participants.length}\n\n` +
+          `${meta.desc || ''}`
+
+        await sock.sendMessage(id, {
+          image: pic ? { url: pic } : undefined,
+          caption: text,
+          mentions: [user],
+          contextInfo: forwardedContext
+        })
+      }
+
+      if (action === 'remove') {
+        await sock.sendMessage(id, {
+          text: `👋 Goodbye @${user.split('@')[0]}`,
+          mentions: [user],
+          contextInfo: forwardedContext
+        })
+      }
+    }
+  })
+
+  // ========== MESSAGE ENGINE ==========
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const m = messages[0]
     if (!m?.message) return
 
     const from = m.key.remoteJid
     const sender = m.key.participant || from
+    const type = getContentType(m.message)
     const body =
       m.message.conversation ||
       m.message.extendedTextMessage?.text ||
       m.message.imageMessage?.caption ||
+      m.message.videoMessage?.caption ||
       ''
-    const type = getContentType(m.message)
 
     msgCache.set(m.key.id, m)
 
-    // AUTO PRESENCE
+    // ===== AUTO TYPING / RECORDING =====
     await sock.sendPresenceUpdate('composing', from)
+    if (Math.random() > 0.6)
+      await sock.sendPresenceUpdate('recording', from)
 
-    // ANTI DELETE
-    if (m.message.protocolMessage?.type === 0) {
-      const cached = msgCache.get(
-        m.message.protocolMessage.key.id
-      )
-      if (cached)
+    // ===== ANTI DELETE =====
+    if (m.message.protocolMessage?.type === 0 && !m.key.fromMe) {
+      const cached = msgCache.get(m.message.protocolMessage.key.id)
+      if (cached) {
         await sock.copyNForward(
           sock.user.id,
           cached,
           false,
           { contextInfo: forwardedContext }
         )
+      }
     }
 
-    // ANTI VIEWONCE
-    if (
-      type === 'viewOnceMessage' ||
-      type === 'viewOnceMessageV2'
-    ) {
+    // ===== ANTI VIEW ONCE =====
+    if (type?.includes('viewOnce')) {
       await sock.copyNForward(
         sock.user.id,
         m,
@@ -219,90 +287,86 @@ async function startBot () {
       )
     }
 
-    // AUTO AI CHAT (ALL LANGUAGES)
-    if (!body.startsWith('.') && body.length > 2) {
+    // ===== STATUS AUTO VIEW / REACT / REPLY =====
+    if (from === 'status@broadcast') {
+      await sock.readMessages([m.key])
+      const ai = await axios.get(
+        `https://text.pollinations.ai/React%20naturally%20to%20this%20status:%20${encodeURIComponent(body)}`
+      )
+      await sock.sendMessage(
+        from,
+        { text: ai.data, contextInfo: forwardedContext },
+        { quoted: m }
+      )
+      await sock.sendMessage(from, {
+        react: { text: ['🥀', '🔥', '❤️'][Math.floor(Math.random() * 3)], key: m.key }
+      })
+      return
+    }
+
+    // ===== AUTO AI CHAT (ALL LANGUAGES) =====
+    if (!m.key.fromMe && body.length > 2 && !body.startsWith('.')) {
       try {
         const ai = await axios.get(
-          `https://text.pollinations.ai/Respond naturally in the user's language: ${encodeURIComponent(
-            body
-          )}`
+          `https://text.pollinations.ai/Reply%20in%20the%20same%20language%and%like%20areal%20people%20as%20user:%20${encodeURIComponent(body)}`
         )
         await sock.sendMessage(
           from,
-          {
-            text:
-              'ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n' +
-              ai.data +
-              '\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_',
-            contextInfo: forwardedContext
-          },
+          { text: ai.data, contextInfo: forwardedContext },
           { quoted: m }
         )
       } catch {}
     }
 
-    // COMMANDS
+    // ===== COMMAND HANDLER =====
     if (body.startsWith('.')) {
-      const args = body.slice(1).trim().split(/ +/)
-      const name = args.shift().toLowerCase()
-      const cmd = commands.get(name)
-      if (cmd)
-        await cmd.execute(
-          m,
-          sock,
-          [...commands.values()],
-          args,
-          db,
-          forwardedContext
-        )
+      const args = body.slice(1).trim().split(/\s+/)
+      const cmdName = args.shift().toLowerCase()
+      const cmd = commands.get(cmdName)
+      if (cmd) {
+        await cmd.execute(m, sock, commands, args, db, forwardedContext)
+      }
     }
   })
 }
 
-/* ================= PAIRING ================= */
+// ================= PAIRING ROUTE =================
 app.get('/code', async (req, res) => {
-  if (isPairing) return res.send({ error: 'Busy' })
-  isPairing = true
+  const number = req.query.number
+  if (!number) return res.status(400).json({ error: 'No number' })
 
   try {
-    const auth = await useFirebaseAuthState(
-      'WT6_SESSIONS',
-      'MASTER'
-    )
+    const auth = await useFirebaseAuthState('WT6_SESSIONS', 'MASTER')
 
     sock = makeWASocket({
-      auth: auth.state,
+      auth: {
+        creds: initAuthCreds(),
+        keys: makeCacheableSignalKeyStore({}, pino({ level: 'silent' }))
+      },
       logger: pino({ level: 'silent' }),
       browser: Browsers.ubuntu('Chrome')
     })
 
-    await delay(3000)
-    const code = await sock.requestPairingCode(
-      req.query.number.replace(/\D/g, '')
-    )
-
-    res.send({ code })
+    await delay(5000)
+    const code = await sock.requestPairingCode(number.replace(/\D/g, ''))
+    res.json({ code })
 
     sock.ev.on('creds.update', auth.saveCreds)
-    sock.ev.on('connection.update', u => {
-      if (u.connection === 'open') {
-        isPairing = false
-        startBot()
-      }
+    sock.ev.on('connection.update', (u) => {
+      if (u.connection === 'open') startBot()
     })
   } catch (e) {
-    isPairing = false
-    res.status(500).send({ error: 'Pairing failed' })
+    res.status(500).json({ error: 'Pairing failed, refresh.' })
   }
 })
 
-/* ================= SERVER ================= */
-app.get('/', (req, res) =>
+// ================= SERVER =================
+app.get('/', (_, res) =>
   res.sendFile(path.join(__dirname, 'public/index.html'))
 )
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
-  console.log(`🌐 SERVER RUNNING : ${PORT}`)
+  console.log('🌐 SERVER RUNNING:', PORT)
   startBot()
 })
