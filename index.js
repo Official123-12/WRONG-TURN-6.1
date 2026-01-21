@@ -7,15 +7,18 @@ const {
     fetchLatestBaileysVersion, 
     makeCacheableSignalKeyStore, 
     initAuthCreds,
-    BufferJSON
+    BufferJSON,
+    getContentType
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, initializeFirestore, doc, getDoc, setDoc, deleteDoc } = require('firebase/firestore');
+const { getFirestore, initializeFirestore, doc, getDoc, setDoc, updateDoc, collection, query, getDocs } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
+const axios = require('axios');
 
+// 1. FIREBASE CONFIG
 const firebaseConfig = {
     apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
     authDomain: "stanybots.firebaseapp.com",
@@ -30,9 +33,28 @@ const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true
 
 const app = express();
 const commands = new Map();
+const msgCache = new Map(); 
 let sock = null;
 
-// 1. DYNAMIC COMMAND LOADER
+// PREMIUM FORWARDING MASK (Newsletter ID)
+const forwardedContext = {
+    isForwarded: true,
+    forwardingScore: 999,
+    forwardedNewsletterMessageInfo: {
+        newsletterJid: '120363404317544295@newsletter',
+        serverMessageId: 1,
+        newsletterName: 'ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀'
+    }
+};
+
+// 2. MOOD ENGINE
+const getMoodReply = (text) => {
+    const t = text.toLowerCase();
+    if (/(sad|cry|hurt|pain|😭|💔|😔)/.test(t)) return "Wrong Turn 6 detected sadness. Stay strong, better days ahead. 🥀";
+    if (/(happy|blessed|success|win|🔥|🚀|💰)/.test(t)) return "Pure greatness! WRONG TURN 6 celebrates this win with you! 🥂";
+    return "Observed by Wrong Turn 6. 🥀";
+};
+
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
@@ -52,7 +74,6 @@ const loadCmds = () => {
     });
 };
 
-// 2. FIREBASE AUTH HANDLER
 async function useFirebaseAuthState(db, collectionName, sessionId) {
     const fixId = (id) => `${sessionId}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`;
     const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
@@ -62,10 +83,7 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
             return snapshot.exists() ? JSON.parse(JSON.stringify(snapshot.data()), BufferJSON.reviver) : null;
         } catch (e) { return null; }
     };
-    const removeData = async (id) => deleteDoc(doc(db, collectionName, fixId(id)));
-
-    let creds = await readData('creds') || initAuthCreds();
-
+    const creds = await readData('creds') || initAuthCreds();
     return {
         state: {
             creds,
@@ -83,14 +101,13 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
                     for (const type in data) {
                         for (const id in data[type]) {
                             const value = data[type][id];
-                            value ? await writeData(value, `${type}-${id}`) : await removeData(`${type}-${id}`);
+                            if (value) await writeData(value, `${type}-${id}`);
                         }
                     }
                 }
             }
         },
-        saveCreds: () => writeData(creds, 'creds'),
-        clearSession: () => removeData('creds')
+        saveCreds: () => writeData(creds, 'creds')
     };
 }
 
@@ -102,12 +119,9 @@ async function startBot() {
     sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS("Safari"), // User Preferred
-        printQRInTerminal: false,
+        browser: Browsers.ubuntu("Chrome"), 
         markOnlineOnConnect: true,
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 0,
-        keepAliveIntervalMs: 10000
+        connectTimeoutMs: 60000
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -116,72 +130,130 @@ async function startBot() {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
             console.log("✅ WRONG TURN 6: CONNECTED");
-            const welcome = `┏━━━━ 『 WRONG TURN 6 』 ━━━━┓\n┃\n┃ 🥀 *SYSTEM ARMED & ACTIVE*\n┃\n┣━━━━━━━━━━━━━━━━━━━━━━━┓\n┃ 🛡️ *DEV    :* STANYTZ\n┃ ⚙️ *VERSION:* 6.6.0\n┃ 🌐 *ENGINE :* AngularSockets\n┃ 🌷 *PREFIX :* [ . ]\n┗━━━━━━━━━━━━━━━━━━━━━━━┛\n\n🥀🥂 *STANYTZ INDUSTRIES*`;
-            await sock.sendMessage(sock.user.id, { text: welcome });
+            const welcome = `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴀᴄᴛɪᴠᴇ\nᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ\nꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ`;
+            await sock.sendMessage(sock.user.id, { text: welcome, contextInfo: forwardedContext });
         }
-        if (connection === 'close') {
-            const reason = lastDisconnect?.error?.output?.statusCode;
-            if (reason !== DisconnectReason.loggedOut) startBot();
-        }
+        if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) setTimeout(startBot, 5000);
     });
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
-        if (!m.message || m.key.fromMe) return;
+        if (!m.message) return;
         const from = m.key.remoteJid;
-        const body = (m.message.conversation || m.message.extendedTextMessage?.text || "").trim();
+        const sender = m.key.participant || from;
+        const body = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "").trim();
+        const type = getContentType(m.message);
 
-        // Auto Typing
+        msgCache.set(m.key.id, m);
+
+        // CONFIG FETCH
+        const setSnap = await getDoc(doc(db, "SETTINGS", "GLOBAL"));
+        const s = setSnap.exists() ? setSnap.data() : { prefix: ".", mode: "public", autoAI: true, forceJoin: true, autoStatus: true };
+        const ownerId = sock.user.id?.split(':')[0] || '255';
+        const isOwner = sender.startsWith(ownerId) || m.key.fromMe;
+
+        // UNIVERSAL REPLY-BY-NUMBER
+        const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        const quotedText = (quoted?.conversation || quoted?.extendedTextMessage?.text || "").toLowerCase();
+        if (quoted && !isNaN(body) && body.length > 0) {
+            for (let [cmdName, cmdObj] of commands) {
+                if (quotedText.includes(cmdName)) {
+                    await cmdObj.execute(m, sock, Array.from(commands.values()), [body.trim()], db, forwardedContext);
+                    break;
+                }
+            }
+        }
+
+        // AUTO PRESENCE
         await sock.sendPresenceUpdate('composing', from);
 
-        if (body.startsWith('.')) {
-            const args = body.slice(1).trim().split(/ +/);
+        // ANTI-DELETE & VIEWONCE
+        if (m.message.protocolMessage?.type === 0 && !m.key.fromMe) {
+            const cached = msgCache.get(m.message.protocolMessage.key.id);
+            if (cached) await sock.copyNForward(sock.user.id, cached, false, { contextInfo: forwardedContext });
+        }
+        if (type === 'viewOnceMessage' || type === 'viewOnceMessageV2') {
+            await sock.copyNForward(sock.user.id, m, false, { contextInfo: forwardedContext });
+        }
+
+        // FORCE JOIN (Group JID: 120363406549688641@g.us)
+        if (body.startsWith(s.prefix) && !isOwner && s.forceJoin) {
+            try {
+                const groupMetadata = await sock.groupMetadata('120363406549688641@g.us');
+                if (!groupMetadata.participants.find(p => p.id === (sender.split(':')[0] + '@s.whatsapp.net'))) {
+                    return sock.sendMessage(from, { text: "❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ: https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y", contextInfo: forwardedContext });
+                }
+            } catch (e) {}
+        }
+
+        // AUTO STATUS (HUMAN)
+        if (from === 'status@broadcast') {
+            await sock.readMessages([m.key]);
+            const moodPrompt = `React as a human friend in 1 brief English sentence to: "${body}"`;
+            const aiMood = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(moodPrompt)}`);
+            await sock.sendMessage(from, { text: aiMood.data, contextInfo: forwardedContext }, { quoted: m });
+            await sock.sendMessage(from, { react: { text: '🥀', key: m.key } }, { statusJidList: [sender] });
+        }
+
+        // UNIVERSAL AUTO-AI CHAT
+        if (!body.startsWith(s.prefix) && !m.key.fromMe && s.autoAI && body.length > 2 && !from.endsWith('@g.us')) {
+            try {
+                const aiPrompt = `Your name is WRONG TURN 6 by STANYTZ. Reply briefly in is origianal language act like human for everthings in 100% to: ${body}`;
+                const aiRes = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(aiPrompt)}`);
+                await sock.sendMessage(from, { text: `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n${aiRes.data}\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`, contextInfo: forwardedContext }, { quoted: m });
+            } catch (e) {}
+        }
+
+        // COMMAND EXECUTION
+        if (body.startsWith(s.prefix)) {
+            const args = body.slice(s.prefix.length).trim().split(/ +/);
             const cmdName = args.shift().toLowerCase();
             const cmd = commands.get(cmdName);
-            if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), args);
+            if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), args, db, forwardedContext);
         }
     });
 
     sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
 }
 
-// 4. THE ULTIMATE PAIRING ROUTE (FIXED INFINITE LOADING)
+// 4. YOUR REQUESTED PAIRING ROUTE (INJECTED)
 app.get('/code', async (req, res) => {
     let num = req.query.number;
     if (!num) return res.status(400).send({ error: "Missing Number" });
 
     try {
-        // Step 1: Wipe old creds to ensure 100% clean handshake
-        const auth = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
-        await auth.clearSession();
+        // 🔑 USE SAME FIREBASE AUTH STATE
+        const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
 
-        // Step 2: Initialize ONE socket and keep it alive
-        sock = makeWASocket({
-            auth: auth.state,
+        const pSock = makeWASocket({
+            auth: state,
             logger: pino({ level: 'silent' }),
-            browser: Browsers.macOS("Safari")
+            browser: Browsers.ubuntu("Chrome")
         });
 
-        // Step 3: Wait for socket stabilization
-        await delay(5000); 
+        await delay(3000);
 
-        // Step 4: Request Code
-        let code = await sock.requestPairingCode(num.replace(/\D/g, ''));
-        console.log(`✅ Code for ${num}: ${code}`);
+        const code = await pSock.requestPairingCode(num.replace(/\D/g, ''));
         res.send({ code });
 
-        // Step 5: Important listeners to capture the link
-        sock.ev.on('creds.update', auth.saveCreds);
-        sock.ev.on('connection.update', (u) => {
-            if (u.connection === 'open') console.log("Link Confirmed!");
-        });
+        // ✅ THIS NOW SAVES PROPERLY
+        pSock.ev.on('creds.update', saveCreds);
 
     } catch (e) {
         console.error(e);
-        res.status(500).send({ error: "Precondition Failed. Refresh and try again." });
+        res.status(500).send({ error: "System Busy" });
     }
 });
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => { console.log(`Server Online: ${PORT}`); startBot(); });
+
+// AUTO BIO
+setInterval(async () => {
+    if (sock?.user) {
+        const uptime = `${Math.floor(process.uptime() / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`;
+        await sock.updateProfileStatus(`WRONG TURN 6 | ONLINE | UPTIME: ${uptime}`).catch(() => {});
+        await sock.sendPresenceUpdate('available');
+    }
+}, 30000);
