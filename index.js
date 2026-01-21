@@ -1,5 +1,4 @@
 require('dotenv').config()
-
 const {
   default: makeWASocket,
   DisconnectReason,
@@ -12,13 +11,7 @@ const {
 } = require('@whiskeysockets/baileys')
 
 const { initializeApp } = require('firebase/app')
-const {
-  initializeFirestore,
-  doc,
-  getDoc,
-  setDoc
-} = require('firebase/firestore')
-
+const { initializeFirestore, doc, getDoc, setDoc } = require('firebase/firestore')
 const express = require('express')
 const path = require('path')
 const fs = require('fs-extra')
@@ -26,7 +19,6 @@ const pino = require('pino')
 const axios = require('axios')
 
 /* ================= FIREBASE ================= */
-
 const firebaseConfig = {
   apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
   authDomain: "stanybots.firebaseapp.com",
@@ -42,13 +34,14 @@ const db = initializeFirestore(firebaseApp, {
   useFetchStreams: false
 })
 
-/* ================= GLOBAL ================= */
-
+/* ================= GLOBALS ================= */
 const app = express()
 const commands = new Map()
 const msgCache = new Map()
 let sock = null
+let isPairing = false
 
+/* ================= FORWARDED CONTEXT ================= */
 const forwardedContext = {
   isForwarded: true,
   forwardingScore: 999,
@@ -60,44 +53,40 @@ const forwardedContext = {
 }
 
 /* ================= COMMAND LOADER ================= */
-
-const loadCmds = () => {
-  const cmdPath = path.resolve(__dirname, 'commands')
+function loadCmds () {
+  const cmdPath = path.join(__dirname, 'commands')
   if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath)
 
-  fs.readdirSync(cmdPath).forEach(folder => {
+  for (const folder of fs.readdirSync(cmdPath)) {
     const folderPath = path.join(cmdPath, folder)
-    if (fs.lstatSync(folderPath).isDirectory()) {
-      fs.readdirSync(folderPath)
-        .filter(f => f.endsWith('.js'))
-        .forEach(file => {
-          try {
-            const cmd = require(path.join(folderPath, file))
-            if (cmd?.name) {
-              cmd.category = folder
-              commands.set(cmd.name.toLowerCase(), cmd)
-            }
-          } catch {}
-        })
+    if (!fs.lstatSync(folderPath).isDirectory()) continue
+
+    for (const file of fs.readdirSync(folderPath).filter(f => f.endsWith('.js'))) {
+      try {
+        const cmd = require(path.join(folderPath, file))
+        if (cmd?.name) {
+          cmd.category = folder
+          commands.set(cmd.name.toLowerCase(), cmd)
+        }
+      } catch {}
     }
-  })
+  }
 }
 
 /* ================= FIREBASE AUTH STATE ================= */
-
-async function useFirebaseAuthState(db, collectionName, sessionId) {
-  const fixId = (id) =>
-    `${sessionId}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`
+async function useFirebaseAuthState (collection, sessionId) {
+  const fixId = id =>
+    `${sessionId}_${id.replace(/\//g, '__').replace(/@/g, 'at')}`
 
   const writeData = async (data, id) =>
     setDoc(
-      doc(db, collectionName, fixId(id)),
+      doc(db, collection, fixId(id)),
       JSON.parse(JSON.stringify(data, BufferJSON.replacer))
     )
 
-  const readData = async (id) => {
+  const readData = async id => {
     try {
-      const snap = await getDoc(doc(db, collectionName, fixId(id)))
+      const snap = await getDoc(doc(db, collection, fixId(id)))
       return snap.exists()
         ? JSON.parse(JSON.stringify(snap.data()), BufferJSON.reviver)
         : null
@@ -106,7 +95,7 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
     }
   }
 
-  let creds = (await readData('creds')) || initAuthCreds()
+  const creds = (await readData('creds')) || initAuthCreds()
 
   return {
     state: {
@@ -114,26 +103,25 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
       keys: {
         get: async (type, ids) => {
           const data = {}
-          await Promise.all(
-            ids.map(async id => {
-              let value = await readData(`${type}-${id}`)
-              if (type === 'app-state-sync-key' && value) {
-                value = require('@whiskeysockets/baileys')
-                  .proto.Message.AppStateSyncKeyData
-                  .fromObject(value)
-              }
-              data[id] = value
-            })
-          )
+          for (const id of ids) {
+            let value = await readData(`${type}-${id}`)
+            if (
+              type === 'app-state-sync-key' &&
+              value
+            ) {
+              value =
+                require('@whiskeysockets/baileys').proto.Message
+                  .AppStateSyncKeyData.fromObject(value)
+            }
+            data[id] = value
+          }
           return data
         },
-        set: async (data) => {
+        set: async data => {
           for (const type in data) {
             for (const id in data[type]) {
               const value = data[type][id]
-              if (value) {
-                await writeData(value, `${type}-${id}`)
-              }
+              if (value) await writeData(value, `${type}-${id}`)
             }
           }
         }
@@ -143,50 +131,49 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
   }
 }
 
-/* ================= BOT ================= */
+/* ================= MAIN BOT ================= */
+async function startBot () {
+  if (sock || isPairing) return
 
-async function startBot() {
   loadCmds()
-
-  const { state, saveCreds } =
-    await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER")
+  const { state, saveCreds } = await useFirebaseAuthState(
+    'WT6_SESSIONS',
+    'MASTER'
+  )
 
   sock = makeWASocket({
     auth: state,
     logger: pino({ level: 'silent' }),
-    browser: Browsers.ubuntu("Chrome"),
-    markOnlineOnConnect: true
+    browser: Browsers.ubuntu('Chrome'),
+    markOnlineOnConnect: true,
+    generateHighQualityLinkPreview: true
   })
 
   sock.ev.on('creds.update', saveCreds)
 
-  sock.ev.on('connection.update', (u) => {
-    const { connection, lastDisconnect } = u
-
-    if (connection === 'open') {
-      console.log('✅ WRONG TURN 6 ONLINE')
+  sock.ev.on('connection.update', u => {
+    if (u.connection === 'open') {
       sock.sendMessage(sock.user.id, {
         text:
-`ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀
-
-ꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ
-ꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ ✔️
-ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ`,
+          'ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\n' +
+          'ꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ\n' +
+          'ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ\n' +
+          'ꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ ✔️',
         contextInfo: forwardedContext
       })
     }
 
     if (
-      connection === 'close' &&
-      lastDisconnect?.error?.output?.statusCode !==
+      u.connection === 'close' &&
+      u.lastDisconnect?.error?.output?.statusCode !==
         DisconnectReason.loggedOut
     ) {
+      sock = null
       setTimeout(startBot, 5000)
     }
   })
 
   /* ================= MESSAGES ================= */
-
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const m = messages[0]
     if (!m?.message) return
@@ -194,89 +181,32 @@ async function startBot() {
     const from = m.key.remoteJid
     const sender = m.key.participant || from
     const body =
-      (m.message.conversation ||
-        m.message.extendedTextMessage?.text ||
-        m.message.imageMessage?.caption ||
-        m.message.videoMessage?.caption ||
-        '').trim()
-
+      m.message.conversation ||
+      m.message.extendedTextMessage?.text ||
+      m.message.imageMessage?.caption ||
+      ''
     const type = getContentType(m.message)
+
     msgCache.set(m.key.id, m)
 
-    /* ===== REPLY BY NUMBER ===== */
+    // AUTO PRESENCE
+    await sock.sendPresenceUpdate('composing', from)
 
-    const quoted =
-      m.message?.extendedTextMessage?.contextInfo?.quotedMessage
-    const quotedText =
-      (quoted?.conversation ||
-        quoted?.extendedTextMessage?.text ||
-        '').toLowerCase()
-
-    if (quoted && !isNaN(body)) {
-      for (const [name, cmd] of commands) {
-        if (quotedText.includes(name)) {
-          await cmd.execute(
-            m,
-            sock,
-            Array.from(commands.values()),
-            [body],
-            db,
-            forwardedContext
-          )
-          return
-        }
-      }
-    }
-
-    /* ===== AUTO AI CHAT ===== */
-
-    if (
-      !body.startsWith('.') &&
-      !m.key.fromMe &&
-      body.length > 2
-    ) {
-      try {
-        const prompt =
-          `Reply naturally in user's language: ${body}`
-        const ai =
-          await axios.get(
-            `https://text.pollinations.ai/${encodeURIComponent(prompt)}`
-          )
-        await sock.sendMessage(
-          from,
-          {
-            text:
-`ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀
-
-${ai.data}
-
-_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`,
-            contextInfo: forwardedContext
-          },
-          { quoted: m }
-        )
-      } catch {}
-    }
-
-    /* ===== ANTI DELETE ===== */
-
+    // ANTI DELETE
     if (m.message.protocolMessage?.type === 0) {
-      const cached =
-        msgCache.get(
-          m.message.protocolMessage.key.id
-        )
-      if (cached) {
+      const cached = msgCache.get(
+        m.message.protocolMessage.key.id
+      )
+      if (cached)
         await sock.copyNForward(
           sock.user.id,
           cached,
           false,
           { contextInfo: forwardedContext }
         )
-      }
     }
 
-    /* ===== ANTI VIEWONCE ===== */
-
+    // ANTI VIEWONCE
     if (
       type === 'viewOnceMessage' ||
       type === 'viewOnceMessageV2'
@@ -289,72 +219,84 @@ _ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`,
       )
     }
 
-    /* ===== COMMANDS ===== */
+    // AUTO AI CHAT (ALL LANGUAGES)
+    if (!body.startsWith('.') && body.length > 2) {
+      try {
+        const ai = await axios.get(
+          `https://text.pollinations.ai/Respond naturally in the user's language: ${encodeURIComponent(
+            body
+          )}`
+        )
+        await sock.sendMessage(
+          from,
+          {
+            text:
+              'ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n' +
+              ai.data +
+              '\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_',
+            contextInfo: forwardedContext
+          },
+          { quoted: m }
+        )
+      } catch {}
+    }
 
+    // COMMANDS
     if (body.startsWith('.')) {
       const args = body.slice(1).trim().split(/ +/)
-      const cmdName = args.shift().toLowerCase()
-      const cmd = commands.get(cmdName)
-      if (cmd) {
+      const name = args.shift().toLowerCase()
+      const cmd = commands.get(name)
+      if (cmd)
         await cmd.execute(
           m,
           sock,
-          Array.from(commands.values()),
+          [...commands.values()],
           args,
           db,
           forwardedContext
         )
-      }
     }
   })
 }
 
-/* ================= PAIRING CODE (FIXED) ================= */
-
+/* ================= PAIRING ================= */
 app.get('/code', async (req, res) => {
-  const num = req.query.number
-  if (!num)
-    return res.status(400).json({ error: 'Number required' })
+  if (isPairing) return res.send({ error: 'Busy' })
+  isPairing = true
 
   try {
-    if (sock) {
-      try { sock.end() } catch {}
-      sock = null
-    }
-
-    const { state, saveCreds } =
-      await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER")
-
-    sock = makeWASocket({
-      auth: state,
-      logger: pino({ level: 'silent' }),
-      browser: Browsers.ubuntu("Chrome")
-    })
-
-    sock.ev.on('creds.update', saveCreds)
-
-    await delay(3000)
-
-    const code = await sock.requestPairingCode(
-      num.replace(/\D/g, '')
+    const auth = await useFirebaseAuthState(
+      'WT6_SESSIONS',
+      'MASTER'
     )
 
-    res.json({ code })
+    sock = makeWASocket({
+      auth: auth.state,
+      logger: pino({ level: 'silent' }),
+      browser: Browsers.ubuntu('Chrome')
+    })
 
-    sock.ev.on('connection.update', (u) => {
+    await delay(3000)
+    const code = await sock.requestPairingCode(
+      req.query.number.replace(/\D/g, '')
+    )
+
+    res.send({ code })
+
+    sock.ev.on('creds.update', auth.saveCreds)
+    sock.ev.on('connection.update', u => {
       if (u.connection === 'open') {
-        console.log('🔗 DEVICE LINKED')
+        isPairing = false
         startBot()
       }
     })
   } catch (e) {
-    console.error(e)
-    res.status(500).json({ error: 'Pairing failed' })
+    isPairing = false
+    res.status(500).send({ error: 'Pairing failed' })
   }
 })
 
 /* ================= SERVER ================= */
-
 app.get('/', (req, res) =>
   res.sendFile(path.join(__dirname, 'public/index.html'))
 )
