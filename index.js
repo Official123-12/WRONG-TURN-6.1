@@ -1,9 +1,3 @@
-/*************************************************
- * WRONG TURN 6 🥀
- * Developer: STANYTZ
- * File: index.js (SINGLE FILE – OPTION 2)
- *************************************************/
-
 require('dotenv').config()
 
 const {
@@ -22,9 +16,7 @@ const {
   initializeFirestore,
   doc,
   getDoc,
-  setDoc,
-  deleteDoc,
-  updateDoc
+  setDoc
 } = require('firebase/firestore')
 
 const express = require('express')
@@ -33,7 +25,7 @@ const fs = require('fs-extra')
 const pino = require('pino')
 const axios = require('axios')
 
-/* ================= FIREBASE CONFIG ================= */
+/* ================= FIREBASE ================= */
 
 const firebaseConfig = {
   apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
@@ -50,18 +42,12 @@ const db = initializeFirestore(firebaseApp, {
   useFetchStreams: false
 })
 
-/* ================= EXPRESS APP ================= */
+/* ================= GLOBAL ================= */
 
 const app = express()
-const PORT = process.env.PORT || 3000
-
-/* ================= GLOBAL STATE ================= */
-
-let sock = null
 const commands = new Map()
 const msgCache = new Map()
-
-/* ================= FORWARDED CONTEXT ================= */
+let sock = null
 
 const forwardedContext = {
   isForwarded: true,
@@ -69,93 +55,49 @@ const forwardedContext = {
   forwardedNewsletterMessageInfo: {
     newsletterJid: '120363404317544295@newsletter',
     serverMessageId: 1,
-    newsletterName: 'ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀'
+    newsletterName: 'ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀'
   }
 }
-
-/* ================= DEFAULT SETTINGS ================= */
-
-const DEFAULT_SETTINGS = {
-  prefix: '.',
-  public: true,
-
-  autoAI: true,
-  autoTyping: true,
-  autoRecording: true,
-
-  autoStatusView: true,
-  autoStatusLike: true,
-  autoStatusReply: true,
-
-  antiDelete: true,
-  antiViewOnce: true,
-  antiLink: true,
-  antiPorn: true,
-  antiScam: true,
-  antiMedia: false,
-
-  welcome: true,
-  goodbye: true,
-
-  forceFollow: true,
-  autoBio: true
-}
-
-/* ================= UTILITY HELPERS ================= */
-
-const sleep = ms => new Promise(r => setTimeout(r, ms))
-
-const normalizeNumber = n => n.replace(/\D/g, '')
-
-const isLink = text => /(https?:\/\/|wa\.me|chat\.whatsapp\.com)/i.test(text)
-
-const isPorn = text =>
-  /(porn|xxx|sex|nude|ngono|🔞|xvideos|xnxx)/i.test(text)
-
-const isScam = text =>
-  /(bundle|fixed match|bet|invest|earn money|crypto)/i.test(text)
 
 /* ================= COMMAND LOADER ================= */
 
-function loadCommands() {
-  const base = path.join(__dirname, 'commands')
-  if (!fs.existsSync(base)) fs.mkdirSync(base)
+const loadCmds = () => {
+  const cmdPath = path.resolve(__dirname, 'commands')
+  if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath)
 
-  const folders = fs.readdirSync(base)
-  for (const folder of folders) {
-    const fPath = path.join(base, folder)
-    if (!fs.lstatSync(fPath).isDirectory()) continue
-
-    const files = fs.readdirSync(fPath).filter(f => f.endsWith('.js'))
-    for (const file of files) {
-      try {
-        const cmd = require(path.join(fPath, file))
-        if (cmd?.name) {
-          commands.set(cmd.name.toLowerCase(), cmd)
-        }
-      } catch (e) {
-        console.log('CMD LOAD ERROR:', file)
-      }
+  fs.readdirSync(cmdPath).forEach(folder => {
+    const folderPath = path.join(cmdPath, folder)
+    if (fs.lstatSync(folderPath).isDirectory()) {
+      fs.readdirSync(folderPath)
+        .filter(f => f.endsWith('.js'))
+        .forEach(file => {
+          try {
+            const cmd = require(path.join(folderPath, file))
+            if (cmd?.name) {
+              cmd.category = folder
+              commands.set(cmd.name.toLowerCase(), cmd)
+            }
+          } catch {}
+        })
     }
-  }
+  })
 }
 
 /* ================= FIREBASE AUTH STATE ================= */
 
-async function useFirebaseAuthState(collection, session) {
+async function useFirebaseAuthState(db, collectionName, sessionId) {
+  const fixId = (id) =>
+    `${sessionId}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`
 
-  const fixId = id =>
-    `${session}_${id.replace(/\//g, '__').replace(/@/g, '_')}`
-
-  const writeData = (data, id) =>
+  const writeData = async (data, id) =>
     setDoc(
-      doc(db, collection, fixId(id)),
+      doc(db, collectionName, fixId(id)),
       JSON.parse(JSON.stringify(data, BufferJSON.replacer))
     )
 
-  const readData = async id => {
+  const readData = async (id) => {
     try {
-      const snap = await getDoc(doc(db, collection, fixId(id)))
+      const snap = await getDoc(doc(db, collectionName, fixId(id)))
       return snap.exists()
         ? JSON.parse(JSON.stringify(snap.data()), BufferJSON.reviver)
         : null
@@ -164,10 +106,7 @@ async function useFirebaseAuthState(collection, session) {
     }
   }
 
-  const removeData = id =>
-    deleteDoc(doc(db, collection, fixId(id)))
-
-  const creds = await readData('creds') || initAuthCreds()
+  let creds = (await readData('creds')) || initAuthCreds()
 
   return {
     state: {
@@ -175,173 +114,157 @@ async function useFirebaseAuthState(collection, session) {
       keys: {
         get: async (type, ids) => {
           const data = {}
-          for (const id of ids) {
-            data[id] = await readData(`${type}-${id}`)
-          }
+          await Promise.all(
+            ids.map(async id => {
+              let value = await readData(`${type}-${id}`)
+              if (type === 'app-state-sync-key' && value) {
+                value = require('@whiskeysockets/baileys')
+                  .proto.Message.AppStateSyncKeyData
+                  .fromObject(value)
+              }
+              data[id] = value
+            })
+          )
           return data
         },
-        set: async data => {
+        set: async (data) => {
           for (const type in data) {
             for (const id in data[type]) {
-              const v = data[type][id]
-              v
-                ? await writeData(v, `${type}-${id}`)
-                : await removeData(`${type}-${id}`)
+              const value = data[type][id]
+              if (value) {
+                await writeData(value, `${type}-${id}`)
+              }
             }
           }
         }
       }
     },
-    saveCreds: () => writeData(creds, 'creds'),
-    clear: () => removeData('creds')
+    saveCreds: () => writeData(creds, 'creds')
   }
 }
-/* ================= START BOT ================= */
+
+/* ================= BOT ================= */
 
 async function startBot() {
-  loadCommands()
+  loadCmds()
 
   const { state, saveCreds } =
-    await useFirebaseAuthState("WT6_SESSIONS", "MASTER")
-
-  if (!state.creds.registered) {
-    console.log("⏳ WAITING FOR PAIRING CODE...")
-    return
-  }
+    await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER")
 
   sock = makeWASocket({
     auth: state,
     logger: pino({ level: 'silent' }),
     browser: Browsers.ubuntu("Chrome"),
-    markOnlineOnConnect: true,
-    generateHighQualityLinkPreview: true
+    markOnlineOnConnect: true
   })
 
   sock.ev.on('creds.update', saveCreds)
 
-  /* ========== CONNECTION UPDATE ========== */
-  sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
+  sock.ev.on('connection.update', (u) => {
+    const { connection, lastDisconnect } = u
+
     if (connection === 'open') {
-      console.log("✅ WRONG TURN 6 CONNECTED")
-
-      const welcome =
-        `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n` +
-        `ꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ\n` +
-        `ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ\n` +
-        `ꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ ✔️`
-
+      console.log('✅ WRONG TURN 6 ONLINE')
       sock.sendMessage(sock.user.id, {
-        text: welcome,
+        text:
+`ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀
+
+ꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ
+ꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ ✔️
+ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ`,
         contextInfo: forwardedContext
       })
     }
 
     if (
       connection === 'close' &&
-      lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+      lastDisconnect?.error?.output?.statusCode !==
+        DisconnectReason.loggedOut
     ) {
-      console.log("🔄 RECONNECTING...")
       setTimeout(startBot, 5000)
     }
   })
 
-  /* ========== GROUP EVENTS (WELCOME / GOODBYE) ========== */
-  sock.ev.on('group-participants.update', async (anu) => {
-    if (!DEFAULT_SETTINGS.welcome && !DEFAULT_SETTINGS.goodbye) return
+  /* ================= MESSAGES ================= */
 
-    const { id, participants, action } = anu
-    const meta = await sock.groupMetadata(id)
-    const groupPic =
-      await sock.profilePictureUrl(id, 'image')
-        .catch(() => null)
-
-    for (const user of participants) {
-      if (action === 'add' && DEFAULT_SETTINGS.welcome) {
-        const text =
-          `╭─❖\n` +
-          `│ 🥀 ᴡᴇʟᴄᴏᴍᴇ\n` +
-          `│ 👤 @${user.split('@')[0]}\n` +
-          `│ 👥 ${meta.subject}\n` +
-          `╰─❖`
-
-        await sock.sendMessage(id, {
-          image: groupPic ? { url: groupPic } : undefined,
-          caption: text,
-          mentions: [user],
-          contextInfo: forwardedContext
-        })
-      }
-
-      if (action === 'remove' && DEFAULT_SETTINGS.goodbye) {
-        const text =
-          `╭─❖\n` +
-          `│ 🥀 ɢᴏᴏᴅʙʏᴇ\n` +
-          `│ 👤 @${user.split('@')[0]}\n` +
-          `╰─❖`
-
-        await sock.sendMessage(id, {
-          text,
-          mentions: [user],
-          contextInfo: forwardedContext
-        })
-      }
-    }
-  })
-
-  /* ========== MESSAGE HANDLER ========== */
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const m = messages[0]
     if (!m?.message) return
 
     const from = m.key.remoteJid
     const sender = m.key.participant || from
-    const type = getContentType(m.message)
-
     const body =
-      m.message.conversation ||
-      m.message.extendedTextMessage?.text ||
-      m.message.imageMessage?.caption ||
-      m.message.videoMessage?.caption ||
-      ''
+      (m.message.conversation ||
+        m.message.extendedTextMessage?.text ||
+        m.message.imageMessage?.caption ||
+        m.message.videoMessage?.caption ||
+        '').trim()
 
+    const type = getContentType(m.message)
     msgCache.set(m.key.id, m)
 
-    /* ===== AUTO PRESENCE ===== */
-    if (DEFAULT_SETTINGS.autoTyping)
-      await sock.sendPresenceUpdate('composing', from)
-    if (DEFAULT_SETTINGS.autoRecording && Math.random() > 0.5)
-      await sock.sendPresenceUpdate('recording', from)
+    /* ===== REPLY BY NUMBER ===== */
 
-    /* ===== FORCE FOLLOW ===== */
-    if (DEFAULT_SETTINGS.forceFollow && body.startsWith(DEFAULT_SETTINGS.prefix)) {
-      try {
-        const groupMeta =
-          await sock.groupMetadata('120363406549688641@g.us')
+    const quoted =
+      m.message?.extendedTextMessage?.contextInfo?.quotedMessage
+    const quotedText =
+      (quoted?.conversation ||
+        quoted?.extendedTextMessage?.text ||
+        '').toLowerCase()
 
-        const isMember =
-          groupMeta.participants
-            .find(p => p.id === sender)
-
-        if (!isMember) {
-          return sock.sendMessage(from, {
-            text:
-              `❌ *ACCESS DENIED*\n\n` +
-              `Join our group/channel first:\n` +
-              `https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y`,
-            contextInfo: forwardedContext
-          })
+    if (quoted && !isNaN(body)) {
+      for (const [name, cmd] of commands) {
+        if (quotedText.includes(name)) {
+          await cmd.execute(
+            m,
+            sock,
+            Array.from(commands.values()),
+            [body],
+            db,
+            forwardedContext
+          )
+          return
         }
+      }
+    }
+
+    /* ===== AUTO AI CHAT ===== */
+
+    if (
+      !body.startsWith('.') &&
+      !m.key.fromMe &&
+      body.length > 2
+    ) {
+      try {
+        const prompt =
+          `Reply naturally in user's language: ${body}`
+        const ai =
+          await axios.get(
+            `https://text.pollinations.ai/${encodeURIComponent(prompt)}`
+          )
+        await sock.sendMessage(
+          from,
+          {
+            text:
+`ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀
+
+${ai.data}
+
+_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`,
+            contextInfo: forwardedContext
+          },
+          { quoted: m }
+        )
       } catch {}
     }
 
     /* ===== ANTI DELETE ===== */
-    if (
-      DEFAULT_SETTINGS.antiDelete &&
-      m.message.protocolMessage?.type === 0
-    ) {
-      const cached =
-        msgCache.get(m.message.protocolMessage.key.id)
 
+    if (m.message.protocolMessage?.type === 0) {
+      const cached =
+        msgCache.get(
+          m.message.protocolMessage.key.id
+        )
       if (cached) {
         await sock.copyNForward(
           sock.user.id,
@@ -352,10 +275,11 @@ async function startBot() {
       }
     }
 
-    /* ===== ANTI VIEW ONCE ===== */
+    /* ===== ANTI VIEWONCE ===== */
+
     if (
-      DEFAULT_SETTINGS.antiViewOnce &&
-      (type === 'viewOnceMessage' || type === 'viewOnceMessageV2')
+      type === 'viewOnceMessage' ||
+      type === 'viewOnceMessageV2'
     ) {
       await sock.copyNForward(
         sock.user.id,
@@ -365,158 +289,78 @@ async function startBot() {
       )
     }
 
-    /* ===== GROUP PROTECTION ===== */
-    if (from.endsWith('@g.us')) {
-      if (DEFAULT_SETTINGS.antiLink && isLink(body))
-        await sock.sendMessage(from, { delete: m.key })
+    /* ===== COMMANDS ===== */
 
-      if (DEFAULT_SETTINGS.antiPorn && isPorn(body))
-        await sock.sendMessage(from, { delete: m.key })
-
-      if (DEFAULT_SETTINGS.antiScam && isScam(body))
-        await sock.sendMessage(from, { delete: m.key })
-
-      if (
-        DEFAULT_SETTINGS.antiMedia &&
-        ['imageMessage', 'videoMessage', 'audioMessage'].includes(type)
-      ) {
-        await sock.sendMessage(from, { delete: m.key })
-      }
-    }
-
-    /* ===== AUTO AI CHAT (ALL LANGUAGES) ===== */
-    if (
-      DEFAULT_SETTINGS.autoAI &&
-      !body.startsWith(DEFAULT_SETTINGS.prefix) &&
-      !m.key.fromMe &&
-      body.length > 2
-    ) {
-      try {
-        const prompt =
-          `Reply like a human in user's language:\n${body}`
-
-        const ai =
-          await axios.get(
-            `https://text.pollinations.ai/${encodeURIComponent(prompt)}`
-          )
-
-        await sock.sendMessage(from, {
-          text:
-            `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n` +
-            `${ai.data}\n\n` +
-            `_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`,
-          contextInfo: forwardedContext
-        }, { quoted: m })
-      } catch {}
-    }
-
-    /* ===== COMMAND HANDLER ===== */
-    if (body.startsWith(DEFAULT_SETTINGS.prefix)) {
-      const args =
-        body
-          .slice(DEFAULT_SETTINGS.prefix.length)
-          .trim()
-          .split(/ +/)
-
-      const cmdName = args.shift()?.toLowerCase()
+    if (body.startsWith('.')) {
+      const args = body.slice(1).trim().split(/ +/)
+      const cmdName = args.shift().toLowerCase()
       const cmd = commands.get(cmdName)
-
       if (cmd) {
-        try {
-          await cmd.execute(
-            m,
-            sock,
-            Array.from(commands.values()),
-            args,
-            db,
-            forwardedContext
-          )
-        } catch {}
+        await cmd.execute(
+          m,
+          sock,
+          Array.from(commands.values()),
+          args,
+          db,
+          forwardedContext
+        )
       }
     }
   })
 }
-/* ================= PAIRING CODE ROUTE ================= */
+
+/* ================= PAIRING CODE (FIXED) ================= */
 
 app.get('/code', async (req, res) => {
-  const number = req.query.number
-  if (!number) return res.status(400).json({ error: 'Number required' })
+  const num = req.query.number
+  if (!num)
+    return res.status(400).json({ error: 'Number required' })
 
   try {
-    const { state, saveCreds, clearSession } =
-      await useFirebaseAuthState("WT6_SESSIONS", "MASTER")
+    if (sock) {
+      try { sock.end() } catch {}
+      sock = null
+    }
 
-    await clearSession()
+    const { state, saveCreds } =
+      await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER")
 
-    const tempSock = makeWASocket({
+    sock = makeWASocket({
       auth: state,
       logger: pino({ level: 'silent' }),
-      browser: Browsers.ubuntu("Chrome"),
-      printQRInTerminal: false
+      browser: Browsers.ubuntu("Chrome")
     })
 
-    tempSock.ev.on('creds.update', saveCreds)
+    sock.ev.on('creds.update', saveCreds)
 
-    await delay(4000)
+    await delay(3000)
 
-    const code =
-      await tempSock.requestPairingCode(
-        number.replace(/\D/g, '')
-      )
+    const code = await sock.requestPairingCode(
+      num.replace(/\D/g, '')
+    )
 
     res.json({ code })
 
-    tempSock.ev.on('connection.update', (u) => {
+    sock.ev.on('connection.update', (u) => {
       if (u.connection === 'open') {
-        console.log("🔗 DEVICE LINKED SUCCESSFULLY")
+        console.log('🔗 DEVICE LINKED')
         startBot()
       }
     })
   } catch (e) {
     console.error(e)
-    res.status(500).json({
-      error: 'Precondition Required FIXED'
-    })
+    res.status(500).json({ error: 'Pairing failed' })
   }
 })
 
-/* ================= EXPRESS ================= */
+/* ================= SERVER ================= */
 
-app.get('/', (_, res) =>
+app.get('/', (req, res) =>
   res.sendFile(path.join(__dirname, 'public/index.html'))
 )
 
-
+const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
-  console.log(`🌐 SERVER RUNNING ON :${PORT}`)
+  console.log(`🌐 SERVER RUNNING : ${PORT}`)
   startBot()
 })
-
-/* ================= AUTO BIO ================= */
-
-setInterval(async () => {
-  try {
-    if (!sock?.user) return
-
-    const up =
-      `${Math.floor(process.uptime() / 3600)}h ` +
-      `${Math.floor((process.uptime() % 3600) / 60)}m`
-
-    await sock.updateProfileStatus(
-      `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀 | ᴜᴘᴛɪᴍᴇ ${up}`
-    )
-  } catch {}
-}, 60000)
-
-/* ================= CALL BLOCK ================= */
-
-sock?.ev?.on?.('call', async (call) => {
-  await sock.rejectCall(call[0].id, call[0].from)
-})
-
-/* ================= PROCESS SAFETY ================= */
-
-process.on('uncaughtException', () => {})
-process.on('unhandledRejection', () => {})
-
-/* ================= END ================= */
