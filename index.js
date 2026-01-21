@@ -242,6 +242,124 @@ async function startBot () {
     }
   })
 
+  // ===== ACTIVE MEMBERS TRACKER =====
+if (from.endsWith('@g.us')) {
+  await setDoc(
+    doc(db, "ACTIVITY", from),
+    { [sender]: Date.now() },
+    { merge: true }
+  );
+}
+
+  // ===== SHOW ACTIVE MEMBERS =====
+if (body === `${s.prefix}active` && from.endsWith('@g.us')) {
+  const snap = await getDoc(doc(db, "ACTIVITY", from));
+  if (!snap.exists()) {
+    return sock.sendMessage(from, { text: 'No activity yet.' });
+  }
+
+  const data = snap.data();
+  const now = Date.now();
+  let list = `🥀 *ACTIVE MEMBERS (24H)*\n\n`;
+  let count = 0;
+
+  for (let user in data) {
+    if (now - data[user] < 24 * 60 * 60 * 1000) {
+      list += `• @${user.split('@')[0]}\n`;
+      count++;
+    }
+  }
+
+  list += `\nTotal Active: ${count}`;
+  await sock.sendMessage(from, {
+    text: list,
+    mentions: Object.keys(data),
+    contextInfo: forwardedContext
+  });
+}
+
+  // ===== AUTO KICK INACTIVE (7 DAYS) =====
+const INACTIVE_DAYS = 7;
+
+if (body === `${s.prefix}clean` && from.endsWith('@g.us') && isOwner) {
+  const snap = await getDoc(doc(db, "ACTIVITY", from));
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  const now = Date.now();
+  const remove = [];
+
+  for (let user in data) {
+    if (now - data[user] > INACTIVE_DAYS * 24 * 60 * 60 * 1000) {
+      remove.push(user);
+    }
+  }
+
+  if (remove.length === 0) {
+    return sock.sendMessage(from, { text: '✅ No inactive members.' });
+  }
+
+  await sock.groupParticipantsUpdate(from, remove, 'remove');
+  await sock.sendMessage(from, {
+    text: `🧹 Removed ${remove.length} inactive members`,
+    contextInfo: forwardedContext
+  });
+}
+
+  // ===== PAYMENT TEMPLATE =====
+if (body === `${s.prefix}pay`) {
+  const payText = `
+💳 *WRONG TURN 6 PREMIUM*
+━━━━━━━━━━━━━━
+📌 User: @${sender.split('@')[0]}
+💰 Amount: 5 USD
+📆 Duration: 30 Days
+
+📲 Pay via:
+• Mobile Money
+• Crypto
+• PayPal
+
+📞 Contact Admin
+`;
+  await sock.sendMessage(from, {
+    text: payText,
+    mentions: [sender],
+    contextInfo: forwardedContext
+  });
+}
+
+  // ===== REFERRAL =====
+if (body.startsWith(`${s.prefix}ref`)) {
+  const ref = body.split(' ')[1];
+  if (!ref) {
+    return sock.sendMessage(from, {
+      text: `🔗 Your referral code:\n.ref ${sender}`,
+      contextInfo: forwardedContext
+    });
+  }
+
+  await setDoc(
+    doc(db, "REFERRALS", ref),
+    { [sender]: true },
+    { merge: true }
+  );
+
+  await sock.sendMessage(from, {
+    text: '✅ Referral recorded',
+    contextInfo: forwardedContext
+  });
+}
+
+  // ===== AUTO BIO =====
+setInterval(async () => {
+  if (!sock?.user) return;
+  const up = Math.floor(process.uptime() / 60);
+  await sock.updateProfileStatus(
+    `WRONG TURN 6 🥀 | ONLINE | ${up} min`
+  ).catch(()=>{});
+}, 300000);
+ 
   // ========== MESSAGE ENGINE ==========
   sock.ev.on('messages.upsert', async ({ messages }) => {
     const m = messages[0]
