@@ -17,8 +17,10 @@ const {
 } = require('firebase/firestore')
 
 const express = require('express')
+const path = require('path')
 const axios = require('axios')
 const pino = require('pino')
+const fs = require('fs')
 
 /* ================= FIREBASE ================= */
 const firebaseConfig = {
@@ -30,35 +32,30 @@ const firebaseConfig = {
   appId: "1:381983533939:web:e6cc9445137c74b99df306"
 }
 
-const firebaseApp = initializeApp(firebaseConfig)
-const db = initializeFirestore(firebaseApp, {
+const appFB = initializeApp(firebaseConfig)
+const db = initializeFirestore(appFB, {
   experimentalForceLongPolling: true,
   useFetchStreams: false
 })
 
-/* ================= BRAND / FONTS ================= */
-const BRAND = {
-  bot: 'ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀',
-  dev: '_ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ_',
-  online:
-`ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀
+/* ================= BRAND ================= */
+const BOT = 'ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀'
+const DEV = '_ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ_'
 
-ꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ
-ꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ ✔️`
-}
+const CHANNEL_JID = '120363404317544295@newsletter'
+const FORCE_GROUP = '120363406549688641@g.us'
 
 /* ================= GLOBAL ================= */
 const app = express()
 let sock
 const msgCache = new Map()
+const EMOJIS = ['🥀','🔥','⚡','🧠','👀','🖤','😎']
 
-const CHANNEL_JID = '120363404317544295@newsletter'
-const FORCE_GROUP = '120363406549688641@g.us'
-const EMOJIS = ['🥀','🔥','⚡','🧠','😎','👀','🖤']
+app.use(express.static(path.join(__dirname,'public')))
 
 /* ================= FIREBASE AUTH ================= */
-async function useFirebaseAuth(session) {
-  const fix = id => `${session}_${id.replace(/\//g,'_').replace(/@/g,'at')}`
+async function useFirebaseAuth(sessionId) {
+  const fix = id => `${sessionId}_${id.replace(/\//g,'_').replace(/@/g,'at')}`
 
   const write = async (data,id)=>
     setDoc(doc(db,'WT6_SESSIONS',fix(id)),
@@ -101,6 +98,11 @@ async function useFirebaseAuth(session) {
 async function startBot() {
   const { state, saveCreds } = await useFirebaseAuth('MASTER')
 
+  if (!state.creds.registered) {
+    console.log('⏳ Waiting for pairing...')
+    return
+  }
+
   sock = makeWASocket({
     auth: state,
     logger: pino({ level:'silent' }),
@@ -113,12 +115,18 @@ async function startBot() {
   sock.ev.on('connection.update', async ({ connection, lastDisconnect })=>{
     if (connection === 'open') {
       await sock.sendMessage(sock.user.id,{
-        text:`${BRAND.online}\n\n${BRAND.dev}`,
+        text:
+`${BOT}
+
+ꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ
+ꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ ✔️
+
+${DEV}`,
         contextInfo:{
           forwardedNewsletterMessageInfo:{
             newsletterJid: CHANNEL_JID,
             serverMessageId: 1,
-            newsletterName: BRAND.bot
+            newsletterName: BOT
           }
         }
       })
@@ -146,7 +154,22 @@ async function startBot() {
     const type = getContentType(m.message)
     msgCache.set(m.key.id,m)
 
-    /* ===== STATUS ENGINE ===== */
+    /* AUTO TYPING / RECORDING */
+    await sock.sendPresenceUpdate('composing',from)
+    if (Math.random() > 0.6)
+      await sock.sendPresenceUpdate('recording',from)
+
+    /* ANTI DELETE */
+    if (m.message?.protocolMessage?.type === 0) {
+      const old = msgCache.get(m.message.protocolMessage.key.id)
+      if (old) await sock.copyNForward(sock.user.id,old,false)
+    }
+
+    /* ANTI VIEW ONCE */
+    if (type?.includes('viewOnce'))
+      await sock.copyNForward(sock.user.id,m,false)
+
+    /* STATUS ENGINE */
     if (from === 'status@broadcast') {
       await sock.readMessages([m.key])
 
@@ -162,85 +185,26 @@ async function startBot() {
       )
 
       await sock.sendMessage(from,{
-        text:`${BRAND.bot}\n\n${ai.data}\n\n${BRAND.dev}`,
+        text:`${BOT}\n\n${ai.data}\n\n${DEV}`,
         contextInfo:{
           forwardedNewsletterMessageInfo:{
             newsletterJid: CHANNEL_JID,
             serverMessageId: 1,
-            newsletterName: BRAND.bot
+            newsletterName: BOT
           }
         }
       })
       return
     }
 
-    /* ===== ANTI DELETE ===== */
-    if (m.message?.protocolMessage?.type === 0) {
-      const old = msgCache.get(m.message.protocolMessage.key.id)
-      if (old) await sock.copyNForward(sock.user.id,old,false)
-    }
-
-    /* ===== ANTI VIEW ONCE ===== */
-    if (type?.includes('viewOnce'))
-      await sock.copyNForward(sock.user.id,m,false)
-
-    /* ===== AUTO AI CHAT ===== */
+    /* AUTO AI CHAT – ALL LANGUAGES */
     if (!body.startsWith('.') && body.length > 2) {
       const ai = await axios.get(
-        `https://text.pollinations.ai/Reply like a human in same language:\n${body}`
+        `https://text.pollinations.ai/Reply naturally in same language:\n${body}`
       )
 
       await sock.sendMessage(from,{
-        text:`${BRAND.bot}\n\n${ai.data}\n\n${BRAND.dev}`,
+        text:`${BOT}\n\n${ai.data}\n\n${DEV}`,
         contextInfo:{
           forwardedNewsletterMessageInfo:{
             newsletterJid: CHANNEL_JID,
-            serverMessageId: 1,
-            newsletterName: BRAND.bot
-          }
-        }
-      },{ quoted:m })
-    }
-  })
-}
-
-/* ================= PAIRING ================= */
-app.get('/code', async (req,res)=>{
-  const num = req.query.number
-  if (!num) return res.send('NO NUMBER')
-
-  const auth = await useFirebaseAuth('MASTER')
-  await auth.clear()
-
-  sock = makeWASocket({
-    auth: auth.state,
-    logger: pino({ level:'silent' }),
-    browser: Browsers.ubuntu('Chrome')
-  })
-
-  await delay(3000)
-  const code = await sock.requestPairingCode(num.replace(/\D/g,''))
-
-  res.json({ code })
-
-  sock.ev.on('creds.update', auth.saveCreds)
-  sock.ev.on('connection.update', u=>{
-    if (u.connection === 'open') startBot()
-  })
-})
-
-/* ================= AUTO BIO ================= */
-setInterval(async ()=>{
-  if (sock?.user) {
-    const up = Math.floor(process.uptime()/60)
-    await sock.updateProfileStatus(
-      `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀 | ᴜᴘᴛɪᴍᴇ ${up}m`
-    ).catch(()=>{})
-  }
-},30000)
-
-/* ================= SERVER ================= */
-app.listen(3000,()=>{
-  console.log('WRONG TURN 6 SERVER ONLINE')
-  startBot()
-})
