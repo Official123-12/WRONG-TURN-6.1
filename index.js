@@ -16,8 +16,8 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
+const axios = require('axios');
 
-// 1. FIREBASE WEB SDK CONFIG
 const firebaseConfig = {
     apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
     authDomain: "stanybots.firebaseapp.com",
@@ -32,9 +32,10 @@ const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true
 
 const app = express();
 const commands = new Map();
+const msgCache = new Map(); 
 let sock = null;
 
-// 2. ORIGINAL NEWSLETTER FORWARDING CONTEXT
+// PREMIUM NEWSLETTER MASKING
 const forwardedContext = {
     isForwarded: true,
     forwardingScore: 999,
@@ -45,7 +46,6 @@ const forwardedContext = {
     }
 };
 
-// 3. COMMAND LOADER (SUBFOLDERS)
 const loadCmds = () => {
     const cmdPath = path.resolve(__dirname, 'commands');
     if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
@@ -65,7 +65,6 @@ const loadCmds = () => {
     });
 };
 
-// 4. FIREBASE AUTH HANDLER
 async function useFirebaseAuthState(db, collectionName, sessionId) {
     const fixId = (id) => `${sessionId}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`;
     const writeData = async (data, id) => setDoc(doc(db, collectionName, fixId(id)), JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
@@ -98,7 +97,6 @@ async function useFirebaseAuthState(db, collectionName, sessionId) {
     }}, saveCreds: () => writeData(creds, 'creds'), clearSession: () => removeData('creds') };
 }
 
-// 5. MAIN BOT ENGINE
 async function startBot() {
     loadCmds();
     const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
@@ -109,7 +107,6 @@ async function startBot() {
         browser: Browsers.macOS("Safari"), 
         markOnlineOnConnect: true,
         connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 0,
         keepAliveIntervalMs: 10000
     });
 
@@ -119,7 +116,7 @@ async function startBot() {
         const { connection, lastDisconnect } = u;
         if (connection === 'open') {
             console.log("✅ WRONG TURN 6: CONNECTED");
-            const welcome = `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴀᴄᴛɪᴠᴇ\nᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ\nꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ`;
+            const welcome = `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀\n\nꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ\nᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ\nꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ`;
             await sock.sendMessage(sock.user.id, { text: welcome, contextInfo: forwardedContext });
         }
         if (connection === 'close') {
@@ -130,49 +127,70 @@ async function startBot() {
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
-        if (!m.message || m.key.fromMe) return;
+        if (!m.message) return;
         const from = m.key.remoteJid;
-        const body = (m.message.conversation || m.message.extendedTextMessage?.text || "").trim();
+        const sender = m.key.participant || from;
+        const body = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "").trim();
+        const type = getContentType(m.message);
 
-        // AUTO PRESENCE
+        msgCache.set(m.key.id, m);
+        const isOwner = sender.startsWith('255618668502') || m.key.fromMe;
+
+        // 1. AUTO PRESENCE
         await sock.sendPresenceUpdate('composing', from);
 
-        // COMMAND EXECUTION
+        // 2. ANTI-DELETE & VIEWONCE (DM to Owner)
+        if (m.message.protocolMessage?.type === 0 && !m.key.fromMe) {
+            const cached = msgCache.get(m.message.protocolMessage.key.id);
+            if (cached) await sock.copyNForward(sock.user.id, cached, false, { contextInfo: forwardedContext });
+        }
+        if (type === 'viewOnceMessage' || type === 'viewOnceMessageV2') {
+            await sock.copyNForward(sock.user.id, m, false, { contextInfo: forwardedContext });
+        }
+
+        // 3. FORCE JOIN (Group: 120363406549688641@g.us)
+        if (body.startsWith('.') && !isOwner) {
+            try {
+                const groupMetadata = await sock.groupMetadata('120363406549688641@g.us');
+                if (!groupMetadata.participants.find(p => p.id === (sender.split(':')[0] + '@s.whatsapp.net'))) {
+                    const deny = `❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ ᴏᴜʀ ɢʀᴏᴜᴘ/ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜꜱᴇ ʙᴏᴛ.\n\n🥀 *ᴅᴇᴠ:* ꜱᴛᴀɴʏᴛᴢ\n🛡️ *ʙᴏᴛ:* ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ`;
+                    return sock.sendMessage(from, { text: deny, contextInfo: forwardedContext });
+                }
+            } catch (e) {}
+        }
+
+        // 4. AUTO-AI CHAT (Universal Response)
+        if (!body.startsWith('.') && !m.key.fromMe && !from.endsWith('@g.us') && body.length > 2) {
+            try {
+                const aiRes = await axios.get(`https://text.pollinations.ai/Reply%20briefly%20and%20naturally%20in%20its%20own%20language:%20${encodeURIComponent(body)}`);
+                await sock.sendMessage(from, { text: `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀\n\n${aiRes.data}\n\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`, contextInfo: forwardedContext }, { quoted: m });
+            } catch (e) {}
+        }
+
+        // 5. COMMAND EXECUTION
         if (body.startsWith('.')) {
             const args = body.slice(1).trim().split(/ +/);
             const cmdName = args.shift().toLowerCase();
             const cmd = commands.get(cmdName);
-            if (cmd) {
-                // Pass the forwardedContext to commands
-                await cmd.execute(m, sock, Array.from(commands.values()), args, db, forwardedContext);
-            }
+            if (cmd) await cmd.execute(m, sock, Array.from(commands.values()), args, db, forwardedContext);
         }
     });
 
     sock.ev.on('call', async (c) => sock.rejectCall(c[0].id, c[0].from));
 }
 
-// 6. PAIRING ROUTE (PERSISTENT LOGIC)
+// PAIRING ROUTE (UNTOUCHED STABLE LOGIC)
 app.get('/code', async (req, res) => {
     let num = req.query.number;
     if (!num) return res.status(400).send({ error: "Missing Number" });
     try {
         const auth = await useFirebaseAuthState(db, "WT6_SESSIONS", "MASTER");
         await auth.clearSession();
-        sock = makeWASocket({
-            auth: auth.state,
-            logger: pino({ level: 'silent' }),
-            browser: Browsers.macOS("Safari")
-        });
-
+        sock = makeWASocket({ auth: auth.state, logger: pino({ level: 'silent' }), browser: Browsers.macOS("Safari") });
         await delay(5000); 
         let code = await sock.requestPairingCode(num.replace(/\D/g, ''));
         res.send({ code });
-
         sock.ev.on('creds.update', auth.saveCreds);
-        sock.ev.on('connection.update', (u) => {
-            if (u.connection === 'open') startBot(); 
-        });
     } catch (e) { res.status(500).send({ error: "System Busy" }); }
 });
 
