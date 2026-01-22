@@ -1,7 +1,7 @@
 {
   "name": "wrong-turn-6",
   "version": "6.6.0",
-  "description": "Supreme Armed Mainframe by STANYTZ",
+  "description": "Supreme Mainframe by STANYTZ",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -10,9 +10,9 @@
     "@whiskeysockets/baileys": "npm:angularsockets@1.4.5",
     "firebase": "^10.7.1",
     "express": "^4.19.2",
-    "fs-extra": "^11.2.0",
-    "pino": "^8.21.0",
     "axios": "^1.6.8",
+    "pino": "^8.21.0",
+    "fs-extra": "^11.2.0",
     "jimp": "^0.22.10",
     "dotenv": "^16.4.5"
   }
