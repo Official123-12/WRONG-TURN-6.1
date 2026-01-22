@@ -1,7 +1,6 @@
 {
-  "name": "wrong-turn-6",
+  "name": "wrong-turn-6-supreme",
   "version": "6.6.0",
-  "description": "Supreme Mainframe by STANYTZ",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
