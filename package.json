@@ -1,17 +1,12 @@
 {
-  "name": "wrong-turn-6-supreme",
+  "name": "wrong-turn-6",
   "version": "6.6.0",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
   "dependencies": {
     "@whiskeysockets/baileys": "npm:angularsockets@1.4.5",
     "firebase": "^10.7.1",
     "express": "^4.19.2",
-    "axios": "^1.6.8",
     "pino": "^8.21.0",
-    "fs-extra": "^11.2.0",
+    "axios": "^1.6.8",
     "jimp": "^0.22.10",
     "dotenv": "^16.4.5"
   }
