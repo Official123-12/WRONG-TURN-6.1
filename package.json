@@ -1,12 +1,13 @@
 {
-  "name": "wrong-turn-6",
-  "version": "6.6.0",
+  "name": "wrong-turn-6-omega",
+  "version": "6.6.6",
   "dependencies": {
     "@whiskeysockets/baileys": "npm:angularsockets@1.4.5",
     "firebase": "^10.7.1",
     "express": "^4.19.2",
     "pino": "^8.21.0",
     "axios": "^1.6.8",
+    "fs-extra": "^11.2.0",
     "jimp": "^0.22.10",
     "dotenv": "^16.4.5"
   }
