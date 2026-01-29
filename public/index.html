@@ -3,46 +3,305 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WT6 | SYSTEM LINK</title>
+    <title>WRONG TURN 6 | MAINFRAME LINK</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
-        body { background: #000; color: #fff; font-family: 'Outfit', sans-serif; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; user-select: none; }
-        .iphone { width: 350px; height: 720px; background: rgba(15, 15, 15, 0.95); border: 8px solid #222; border-radius: 55px; position: relative; backdrop-filter: blur(25px); box-shadow: 0 0 50px rgba(255, 0, 0, 0.2); padding: 25px; display: flex; flex-direction: column; align-items: center; }
-        .island { width: 110px; height: 30px; background: #000; border-radius: 20px; margin-bottom: 25px; }
-        .logo { width: 100px; height: 100px; border-radius: 50%; border: 2px solid #ff0000; object-fit: cover; box-shadow: 0 0 20px #ff0000; margin-bottom: 15px; }
-        input { width: 100%; background: #111; border: 1px solid #333; border-radius: 12px; padding: 15px; color: #fff; text-align: center; outline: none; margin-bottom: 20px; font-size: 16px; }
-        button { width: 100%; padding: 15px; background: linear-gradient(45deg, #ff0000, #8b0000); border-radius: 15px; font-weight: bold; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
-        #pairing-code { font-size: 35px; color: #00ff00; font-family: monospace; margin-top: 40px; display: none; text-shadow: 0 0 10px #00ff00; letter-spacing: 3px; cursor: pointer; }
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
+
+        :root {
+            --obsidian-red: #ff0000;
+            --deep-black: #050505;
+            --glass-bg: rgba(15, 15, 15, 0.85);
+        }
+
+        body {
+            background: radial-gradient(circle at center, #1a0505 0%, #000000 100%);
+            color: #ffffff;
+            font-family: 'Outfit', sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* iOS 26 Frame */
+        .iphone-mainframe {
+            width: 360px;
+            height: 760px;
+            background: var(--deep-black);
+            border: 10px solid #1a1a1a;
+            border-radius: 60px;
+            position: relative;
+            backdrop-filter: blur(30px);
+            box-shadow: 0 0 60px rgba(255, 0, 0, 0.2), inset 0 0 20px rgba(0,0,0,1);
+            display: flex;
+            flex-direction: column;
+            padding: 25px;
+            border-bottom: 15px solid #1a1a1a;
+        }
+
+        .dynamic-island {
+            width: 120px;
+            height: 35px;
+            background: #000;
+            border-radius: 20px;
+            margin: 0 auto 30px;
+            box-shadow: 0 0 10px rgba(255,0,0,0.1);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .dynamic-island.active {
+            width: 200px;
+            height: 45px;
+        }
+
+        .bot-logo {
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            border: 3px solid var(--obsidian-red);
+            box-shadow: 0 0 25px var(--obsidian-red);
+            object-fit: cover;
+            margin: 0 auto 15px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 20px var(--obsidian-red); }
+            50% { transform: scale(1.05); box-shadow: 0 0 40px var(--obsidian-red); }
+            100% { transform: scale(1); box-shadow: 0 0 20px var(--obsidian-red); }
+        }
+
+        .glass-input-group {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 0, 0, 0.15);
+            border-radius: 20px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid #333;
+            padding: 10px;
+            color: #fff;
+            text-align: center;
+            outline: none;
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            transition: 0.3s;
+        }
+
+        input:focus {
+            border-bottom-color: var(--obsidian-red);
+        }
+
+        .btn-link {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%);
+            border-radius: 18px;
+            font-weight: 800;
+            margin-top: 25px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 10px 20px rgba(255, 0, 0, 0.3);
+            transition: 0.4s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-link:active { transform: scale(0.96); }
+
+        /* Pairing Code Display */
+        #code-readout {
+            display: none;
+            margin-top: 40px;
+            text-align: center;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .code-container {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 2.8rem;
+            color: #00ff00;
+            font-weight: 900;
+            letter-spacing: 6px;
+            text-shadow: 0 0 20px #00ff00;
+            background: rgba(0, 255, 0, 0.05);
+            padding: 15px;
+            border-radius: 15px;
+            cursor: pointer;
+            border: 1px dashed #00ff00;
+        }
+
+        .instruction {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 15px;
+            line-height: 1.5;
+        }
+
+        .stats-footer {
+            margin-top: auto;
+            width: 100%;
+            padding: 15px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 20px;
+            font-size: 0.7rem;
+            color: #555;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .repair-btn {
+            font-size: 0.8rem;
+            color: var(--obsidian-red);
+            text-decoration: underline;
+            margin-top: 15px;
+            cursor: pointer;
+            display: none;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .aesthetic-rose {
+            position: absolute;
+            bottom: 100px;
+            right: 30px;
+            font-size: 2rem;
+            opacity: 0.2;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body oncontextmenu="return false;">
-    <div class="iphone">
-        <div class="island"></div>
-        <img src="https://files.catbox.moe/59ays3.jpg" class="logo">
-        <h2 class="text-red-600 font-bold tracking-widest text-xl uppercase">Wrong Turn 6</h2>
-        <p class="text-[10px] text-gray-600 mb-10">BY STANYTZ</p>
-        <input type="number" id="phone" placeholder="2557XXXXXXXX">
-        <button onclick="get()" id="btn">PAIRING CODE</button>
-        <div id="pairing-code" onclick="copy()">--------</div>
+
+    <div class="iphone-mainframe">
+        <div id="island" class="dynamic-island"></div>
+        
+        <img src="https://files.catbox.moe/59ays3.jpg" class="bot-logo" alt="Logo">
+        
+        <h1 class="text-center text-xl font-bold tracking-[6px] text-red-600">WRONG TURN 6</h1>
+        <p class="text-center text-[10px] text-gray-500 uppercase tracking-widest">Sovereign Mainframe by STANYTZ</p>
+
+        <div id="input-section" class="glass-input-group">
+            <p class="text-[10px] text-gray-400 mb-4 text-center">ENTER ENCRYPTED TARGET NUMBER</p>
+            <input type="number" id="phoneNumber" placeholder="255XXXXXXXXX">
+            <button onclick="requestPairing()" id="mainBtn" class="btn-link">
+                <i class="fas fa-plug mr-2"></i> LINK SYSTEM
+            </button>
+        </div>
+
+        <div id="code-readout">
+            <p class="text-[10px] text-green-500 mb-2 font-bold tracking-widest uppercase">Encryption Key Generated</p>
+            <div class="code-container" id="codeDisplay" onclick="copyCode()">--------</div>
+            <p class="instruction">
+                Go to WhatsApp > Linked Devices > Link with Phone Number. Enter the code above to authorize the node.
+            </p>
+            <div class="repair-btn" onclick="resetUI()">
+                <i class="fas fa-undo mr-1"></i> RE-PAIR DEVICE
+            </div>
+        </div>
+
+        <div class="aesthetic-rose">🥀</div>
+
+        <div class="stats-footer">
+            <div class="stat-item">
+                <span>MAINFRAME STATUS:</span>
+                <span class="text-green-500 font-bold">ACTIVE</span>
+            </div>
+            <div class="stat-item">
+                <span>ACTIVE NODES:</span>
+                <span id="nodeCount" class="text-white">1,842</span>
+            </div>
+            <div class="stat-item">
+                <span>UPTIME:</span>
+                <span class="text-white">99.9%</span>
+            </div>
+            <div class="stat-item">
+                <span>ENCRYPTION:</span>
+                <span class="text-white">AES-256 BIT</span>
+            </div>
+        </div>
     </div>
+
     <script>
-        async function get() {
-            const n = document.getElementById('phone').value;
-            if(!n) return alert("Enter Number!");
-            document.getElementById('btn').innerText = "GENERATING...";
-            const res = await fetch('/code?number=' + n);
-            const data = await res.json();
-            if(data.code) {
-                document.getElementById('pairing-code').innerText = data.code;
-                document.getElementById('pairing-code').style.display = 'block';
-                document.getElementById('btn').innerText = "SUCCESS";
+        async function requestPairing() {
+            const num = document.getElementById('phoneNumber').value;
+            const btn = document.getElementById('mainBtn');
+            const island = document.getElementById('island');
+            const inputSec = document.getElementById('input-section');
+            const readout = document.getElementById('code-readout');
+            const codeDisplay = document.getElementById('codeDisplay');
+
+            if (!num || num.length < 10) {
+                return alert("Please enter a valid global number!");
+            }
+
+            // UI Transition to Loading
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> GENERATING...';
+            btn.disabled = true;
+            island.classList.add('active');
+
+            try {
+                const response = await fetch(`/code?number=${num}`);
+                const data = await response.json();
+
+                if (data.code) {
+                    inputSec.style.display = 'none';
+                    readout.style.display = 'block';
+                    codeDisplay.innerText = data.code;
+                    document.querySelector('.repair-btn').style.display = 'block';
+                    island.classList.remove('active');
+                } else {
+                    throw new Error("System Busy");
+                }
+            } catch (err) {
+                alert("Mainframe Busy. Please try again.");
+                resetUI();
             }
         }
-        function copy() {
-            navigator.clipboard.writeText(document.getElementById('pairing-code').innerText);
-            alert("Code Copied.");
+
+        function resetUI() {
+            document.getElementById('input-section').style.display = 'block';
+            document.getElementById('code-readout').style.display = 'none';
+            const btn = document.getElementById('mainBtn');
+            btn.innerHTML = '<i class="fas fa-plug mr-2"></i> LINK SYSTEM';
+            btn.disabled = false;
+            document.getElementById('island').classList.remove('active');
         }
+
+        function copyCode() {
+            const code = document.getElementById('codeDisplay').innerText;
+            navigator.clipboard.writeText(code);
+            alert("Pairing Code copied to neural link.");
+        }
+
+        // Fake node counter drift
+        setInterval(() => {
+            const el = document.getElementById('nodeCount');
+            let count = parseInt(el.innerText.replace(',', ''));
+            el.innerText = (count + (Math.floor(Math.random() * 3) - 1)).toLocaleString();
+        }, 4000);
+
+        // Security: Prevent Inspect
+        document.addEventListener('keydown', e => {
+            if (e.ctrlKey && (e.key === 'u' || e.key === 'i' || e.key === 'j')) e.preventDefault();
+            if (e.key === 'F12') e.preventDefault();
+        });
     </script>
 </body>
 </html>
