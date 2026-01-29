@@ -3,244 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WRONG TURN 6 | PAIRING</title>
+    <title>WT6 | SYSTEM LINK</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
-
-        body {
-            background: #000;
-            color: #fff;
-            font-family: 'Outfit', sans-serif;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
-            user-select: none;
-        }
-
-        /* iOS 26 Pro Max Frame */
-        .iphone-frame {
-            width: 350px;
-            height: 700px;
-            background: rgba(15, 15, 15, 0.9);
-            border: 8px solid #222;
-            border-radius: 55px;
-            position: relative;
-            backdrop-filter: blur(25px);
-            box-shadow: 0 0 50px rgba(255, 0, 0, 0.2);
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .dynamic-island {
-            width: 110px;
-            height: 30px;
-            background: #000;
-            border-radius: 20px;
-            margin-bottom: 25px;
-        }
-
-        .logo-rounded {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            border: 2px solid #ff0000;
-            object-fit: cover;
-            box-shadow: 0 0 20px #ff0000;
-            margin-bottom: 15px;
-        }
-
-        .neon-title {
-            color: #ff0000;
-            font-weight: 700;
-            letter-spacing: 5px;
-            text-shadow: 0 0 10px #ff0000;
-            font-size: 1.2rem;
-        }
-
-        .glass-input {
-            width: 90%;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid #333;
-            border-radius: 15px;
-            padding: 15px;
-            color: #fff;
-            text-align: center;
-            outline: none;
-            margin-top: 30px;
-            transition: 0.3s;
-        }
-
-        .glass-input:focus {
-            border-color: #ff0000;
-            box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
-        }
-
-        .link-btn {
-            width: 90%;
-            padding: 15px;
-            background: linear-gradient(45deg, #ff0000, #8b0000);
-            border-radius: 15px;
-            font-weight: bold;
-            margin-top: 20px;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            box-shadow: 0 5px 15px rgba(255, 0, 0, 0.4);
-        }
-
-        /* Pairing Code Display */
-        #code-display {
-            width: 90%;
-            margin-top: 40px;
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 15px;
-            padding: 20px;
-            border: 1px dashed #ff0000;
-            display: none;
-            text-align: center;
-        }
-
-        #pairing-code {
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 2.2rem;
-            color: #00ff00;
-            font-weight: bold;
-            letter-spacing: 3px;
-            cursor: pointer;
-            text-shadow: 0 0 15px #00ff00;
-        }
-
-        .stats-box {
-            margin-top: auto;
-            width: 90%;
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: 20px;
-            padding: 15px;
-            font-size: 0.7rem;
-            color: #666;
-            margin-bottom: 10px;
-        }
-
-        .stat-line {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-        }
-
-        .aesthetic-flower {
-            position: absolute;
-            bottom: 80px;
-            right: 30px;
-            font-size: 1.5rem;
-            opacity: 0.4;
-        }
+        body { background: #000; color: #fff; font-family: 'Outfit', sans-serif; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; user-select: none; }
+        .iphone { width: 350px; height: 720px; background: rgba(15, 15, 15, 0.95); border: 8px solid #222; border-radius: 55px; position: relative; backdrop-filter: blur(25px); box-shadow: 0 0 50px rgba(255, 0, 0, 0.2); padding: 25px; display: flex; flex-direction: column; align-items: center; }
+        .island { width: 110px; height: 30px; background: #000; border-radius: 20px; margin-bottom: 25px; }
+        .logo { width: 100px; height: 100px; border-radius: 50%; border: 2px solid #ff0000; object-fit: cover; box-shadow: 0 0 20px #ff0000; margin-bottom: 15px; }
+        input { width: 100%; background: #111; border: 1px solid #333; border-radius: 12px; padding: 15px; color: #fff; text-align: center; outline: none; margin-bottom: 20px; font-size: 16px; }
+        button { width: 100%; padding: 15px; background: linear-gradient(45deg, #ff0000, #8b0000); border-radius: 15px; font-weight: bold; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
+        #pairing-code { font-size: 35px; color: #00ff00; font-family: monospace; margin-top: 40px; display: none; text-shadow: 0 0 10px #00ff00; letter-spacing: 3px; cursor: pointer; }
     </style>
 </head>
 <body oncontextmenu="return false;">
-
-    <div class="iphone-frame">
-        <div class="dynamic-island"></div>
-        
-        <!-- Logo Duara -->
-        <img src="https://files.catbox.moe/59ays3.jpg" alt="WT6 Logo" class="logo-rounded">
-        
-        <h1 class="neon-title">WRONG TURN 6</h1>
-        <p class="text-[10px] text-gray-600 tracking-widest mt-1">BY STANYTZ</p>
-
-        <input type="number" id="phone" placeholder="2557XXXXXXXX" class="glass-input">
-        
-        <button onclick="getPairingCode()" id="submit-btn" class="link-btn">
-            LINK SYSTEM
-        </button>
-
-        <!-- Sehemu ya kuonyesha Code -->
-        <div id="code-display">
-            <p class="text-[10px] text-gray-500 mb-2">TAP CODE TO COPY</p>
-            <div id="pairing-code" onclick="copyToClipboard()">--------</div>
-        </div>
-
-        <div class="aesthetic-flower">🥀</div>
-
-        <!-- Bot Stats -->
-        <div class="stats-box">
-            <div class="stat-line">
-                <span>BOT STATUS:</span>
-                <span class="text-green-500">ONLINE</span>
-            </div>
-            <div class="stat-line">
-                <span>ACTIVE USERS:</span>
-                <span id="active-users" class="text-white">1,504</span>
-            </div>
-            <div class="stat-line">
-                <span>UPTIME:</span>
-                <span class="text-white">99.9%</span>
-            </div>
-        </div>
+    <div class="iphone">
+        <div class="island"></div>
+        <img src="https://files.catbox.moe/59ays3.jpg" class="logo">
+        <h2 class="text-red-600 font-bold tracking-widest text-xl uppercase">Wrong Turn 6</h2>
+        <p class="text-[10px] text-gray-600 mb-10">BY STANYTZ</p>
+        <input type="number" id="phone" placeholder="2557XXXXXXXX">
+        <button onclick="get()" id="btn">PAIRING CODE</button>
+        <div id="pairing-code" onclick="copy()">--------</div>
     </div>
-
     <script>
-        async function getPairingCode() {
-            const phoneNumber = document.getElementById('phone').value;
-            const btn = document.getElementById('submit-btn');
-            const codeDisplay = document.getElementById('code-display');
-            const codeText = document.getElementById('pairing-code');
-
-            if (!phoneNumber) {
-                alert("Please enter your WhatsApp number!");
-                return;
-            }
-
-            btn.innerText = "GENERATING...";
-            btn.disabled = true;
-
-            try {
-                // Fetch code kutoka index.js
-                const response = await fetch(`/code?number=${phoneNumber}`);
-                const data = await response.json();
-
-                if (data.code) {
-                    codeDisplay.style.display = "block";
-                    codeText.innerText = data.code;
-                    btn.innerText = "SUCCESS";
-                } else {
-                    alert("Error: " + (data.error || "Failed to get code"));
-                    btn.innerText = "LINK SYSTEM";
-                    btn.disabled = false;
-                }
-            } catch (err) {
-                alert("Server Error. Check Render Logs.");
-                btn.innerText = "LINK SYSTEM";
-                btn.disabled = false;
+        async function get() {
+            const n = document.getElementById('phone').value;
+            if(!n) return alert("Enter Number!");
+            document.getElementById('btn').innerText = "GENERATING...";
+            const res = await fetch('/code?number=' + n);
+            const data = await res.json();
+            if(data.code) {
+                document.getElementById('pairing-code').innerText = data.code;
+                document.getElementById('pairing-code').style.display = 'block';
+                document.getElementById('btn').innerText = "SUCCESS";
             }
         }
-
-        function copyToClipboard() {
-            const code = document.getElementById('pairing-code').innerText;
-            if (code === "--------") return;
-            
-            navigator.clipboard.writeText(code).then(() => {
-                alert("Pairing Code copied to clipboard: " + code);
-            });
+        function copy() {
+            navigator.clipboard.writeText(document.getElementById('pairing-code').innerText);
+            alert("Code Copied.");
         }
-
-        // Live stats simulation
-        setInterval(() => {
-            const userEl = document.getElementById('active-users');
-            let current = parseInt(userEl.innerText.replace(',', ''));
-            userEl.innerText = (current + (Math.floor(Math.random() * 3) - 1)).toLocaleString();
-        }, 5000);
-
-        // Security
-        document.addEventListener('keydown', function(e) {
-            if(e.ctrlKey && (e.key === 'u' || e.key === 's' || e.key === 'i')) {
-                e.preventDefault();
-            }
-        });
     </script>
 </body>
 </html>
