@@ -16,8 +16,9 @@ const express = require('express');
 const pino = require('pino');
 const axios = require('axios');
 const path = require('path');
+const fs = require('fs-extra'); // 🟢 FIXED: Added missing fs-extra
 
-// 🟢 GLOBAL PROTECTION
+// 🟢 GLOBAL ERROR HANDLERS
 process.on('unhandledRejection', e => console.log('🔥 Rejection:', e));
 process.on('uncaughtException', e => console.log('🔥 Exception:', e));
 
@@ -38,7 +39,6 @@ const commands = new Map();
 const msgCache = new Map();
 const activeSessions = new Map();
 
-// 💎 PREMIUM NEWSLETTER MASKING
 const forwardedContext = {
     isForwarded: true,
     forwardingScore: 999,
@@ -50,12 +50,12 @@ const forwardedContext = {
 };
 
 /**
- * 🦾 SUPREME ENGINE LOGIC (FEATURES INJECTION)
+ * 🧠 THE SUPREME INJECTED ENGINE (FEATURES 1 TO LAST)
  */
 async function handleSupremeLogic(sock, m, db) {
     const from = m.key.remoteJid;
     const sender = m.key.participant || from;
-    const body = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "").trim();
+    const body = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || m.message.videoMessage?.caption || "").trim();
     const type = getContentType(m.message);
 
     msgCache.set(m.key.id, m);
@@ -63,13 +63,13 @@ async function handleSupremeLogic(sock, m, db) {
     const isOwner = sender.startsWith(ownerId) || m.key.fromMe;
 
     const setSnap = await getDoc(doc(db, "SETTINGS", ownerId));
-    const s = setSnap.exists() ? setSnap.data() : { prefix: ".", mode: "public", autoAI: true, forceJoin: true, autoStatus: true, antiDelete: true, antiViewOnce: true, antiLink: true, antiScam: true, antiMedia: false };
+    const s = setSnap.exists() ? setSnap.data() : { prefix: ".", mode: "public", autoAI: true, forceJoin: true, autoStatus: true, antiDelete: true, antiViewOnce: true, antiScam: true, antiLink: true, antiTag: true, autoReact: true };
 
     if (s.mode === "private" && !isOwner) return;
 
-    // 1. AUTO PRESENCE
+    // 1. AUTO PRESENCE & REACT
+    if (s.autoReact && !m.key.fromMe) await sock.sendMessage(from, { react: { text: '🥀', key: m.key } });
     await sock.sendPresenceUpdate('composing', from);
-    if (Math.random() > 0.5) await sock.sendPresenceUpdate('recording', from);
 
     // 2. ANTI-DELETE & VIEWONCE (DM to Owner)
     if (m.message?.protocolMessage?.type === 0 && !m.key.fromMe && s.antiDelete) {
@@ -84,41 +84,40 @@ async function handleSupremeLogic(sock, m, db) {
         await sock.copyNForward(sock.user.id, m, false, { contextInfo: forwardedContext });
     }
 
-    // 3. FORCE JOIN & FOLLOW (https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y)
+    // 3. FORCE JOIN & FOLLOW
     const isCmd = body.startsWith(s.prefix) || commands.has(body.split(' ')[0].toLowerCase());
     if (isCmd && !isOwner && s.forceJoin) {
-        const groupMetadata = await sock.groupMetadata('120363406549688641@g.us');
-        if (!groupMetadata.participants.find(p => p.id === (sender.split(':')[0] + '@s.whatsapp.net'))) {
-            return sock.sendMessage(from, { text: "❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ ᴏᴜʀ ɢʀᴏᴜᴘ ᴛᴏ ᴜꜱᴇ ʙᴏᴛ:\nhttps://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y", contextInfo: forwardedContext });
-        }
+        try {
+            const groupMetadata = await sock.groupMetadata('120363406549688641@g.us');
+            if (!groupMetadata.participants.find(p => p.id === (sender.split(':')[0] + '@s.whatsapp.net'))) {
+                return sock.sendMessage(from, { text: "❌ *ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ*\nᴊᴏɪɴ: https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y", contextInfo: forwardedContext });
+            }
+        } catch (e) {}
     }
 
-    // 4. GROUP SECURITY (ANTI-LINK / PORN / CUSTOM SCAM)
+    // 4. GROUP SECURITY (ANTI-LINK / SCAM TAG-ALL)
     if (from.endsWith('@g.us') && !isOwner) {
-        // Anti-Link
         if (s.antiLink && body.match(/https?:\/\/[^\s]+/gi)) await sock.sendMessage(from, { delete: m.key });
         
-        // Anti-Scam (User Customizable via Firebase)
-        const scamKeywords = s.customScams || ["bundle", "fixed match", "earn money"];
-        if (s.antiScam && scamKeywords.some(w => body.toLowerCase().includes(w))) {
+        const scamWords = s.customScams || ["bundle", "fixed match", "earn money"];
+        if (s.antiScam && scamWords.some(w => body.toLowerCase().includes(w))) {
             const metadata = await sock.groupMetadata(from);
             const allMem = metadata.participants.map(v => v.id);
-            await sock.sendMessage(from, { text: `‼️ *ꜱᴄᴀᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ* ‼️\n@${sender.split('@')[0]} is spreading fraud. Do not trust!`, mentions: allMem });
+            await sock.sendMessage(from, { text: `‼️ *ꜱᴄᴀᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ* ‼️\n@${sender.split('@')[0]} is spreading fraud. Alert to all members!`, mentions: allMem });
             await sock.sendMessage(from, { delete: m.key });
             await sock.groupParticipantsUpdate(from, [sender], "remove");
         }
     }
 
-    // 5. AUTO STATUS ENGINE (HUMAN PERSONA)
+    // 5. AUTO STATUS ENGINE (HUMAN)
     if (from === 'status@broadcast' && s.autoStatus) {
         await sock.readMessages([m.key]);
-        const moodPrompt = `You are a cool human friend. React naturally to this status in 1 brief English sentence: "${body}". No quotes.`;
-        const aiMood = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(moodPrompt)}`);
-        await sock.sendMessage(from, { text: aiMood.data, contextInfo: forwardedContext }, { quoted: m });
+        const moodRes = await axios.get(`https://text.pollinations.ai/React to this status naturally as a cool human friend in brief English: "${body}". No quotes.`);
+        await sock.sendMessage(from, { text: moodRes.data, contextInfo: forwardedContext }, { quoted: m });
         await sock.sendMessage(from, { react: { text: '🥀', key: m.key } }, { statusJidList: [sender] });
     }
 
-    // 6. UNIVERSAL AUTO-AI CHAT (ALL LANGUAGES)
+    // 6. UNIVERSAL AUTO-AI CHAT
     if (!isCmd && !m.key.fromMe && s.autoAI && body.length > 2 && !from.endsWith('@g.us')) {
         try {
             const aiPrompt = `Your name is WRONG TURN 6. Developer: STANYTZ. Respond naturally to: ${body}`;
@@ -127,10 +126,7 @@ async function handleSupremeLogic(sock, m, db) {
         } catch (e) {}
     }
 
-    // 7. ACTIVITY TRACKER
-    if (from.endsWith('@g.us')) await setDoc(doc(db, "ACTIVITY", from), { [sender]: Date.now() }, { merge: true });
-
-    // 8. COMMANDS EXECUTION
+    // 7. COMMAND EXECUTION (No-Prefix Support)
     let cmdName = body.startsWith(s.prefix) ? body.slice(s.prefix.length).trim().split(/ +/)[0].toLowerCase() : body.split(' ')[0].toLowerCase();
     let args = body.startsWith(s.prefix) ? body.slice(s.prefix.length).trim().split(/ +/).slice(1) : body.split(' ').slice(1);
     const cmd = commands.get(cmdName);
@@ -138,21 +134,19 @@ async function handleSupremeLogic(sock, m, db) {
 }
 
 /**
- * 🦾 ENGINE BOOTSTRAP (FIXED LINKING RACE CONDITION)
+ * 🦾 ENGINE BOOTSTRAP
  */
 async function startUserBot(num) {
     if (activeSessions.has(num)) return;
     const { state, saveCreds } = await useFirebaseAuthState(num);
-    
     const sock = makeWASocket({
         auth: {
             creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })) // 🟢 FIX: CRITICAL
+            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         },
         logger: pino({ level: 'silent' }),
-        browser: Browsers.ubuntu("Chrome"), // 🟢 FIX: Better than Safari for Handshake
-        markOnlineOnConnect: true,
-        connectTimeoutMs: 60000
+        browser: Browsers.ubuntu("Chrome"),
+        markOnlineOnConnect: true
     });
 
     activeSessions.set(num, sock);
@@ -177,7 +171,7 @@ async function startUserBot(num) {
             const metadata = await sock.groupMetadata(id);
             const groupLogo = await sock.profilePictureUrl(id, 'image').catch(() => 'https://files.catbox.moe/59ays3.jpg');
             for (let n of participants) {
-                let txt = `╭── • 🥀 • ──╮\n  ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴍᴀɪɴꜰʀᴀᴍᴇ \n╰── • 🥀 • ──╯\n\n⚘ ᴜꜱᴇʀ : @${n.split('@')[0]}\n⚘ ɢʀᴏᴜᴘ : ${metadata.subject}\n\n*ᴅᴇꜱᴄʀɪᴘᴛɪᴏɴ*:\n${metadata.desc || 'No description.'}`;
+                let txt = `╭── • 🥀 • ──╮\n  ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴍᴀɪɴꜰʀᴀᴍᴇ \n╰── • 🥀 • ──╯\n\n⚘ ᴜꜱᴇʀ : @${n.split('@')[0]}\n⚘ ɢʀᴏᴜᴘ : ${metadata.subject}\n⚘ ᴍᴇᴍʙᴇʀꜱ : ${metadata.participants.length}\n\n*ᴅᴇꜱᴄʀɪᴘᴛɪᴏɴ*:\n${metadata.desc || 'No description.'}`;
                 await sock.sendMessage(id, { image: { url: groupLogo }, caption: txt, mentions: [n], contextInfo: forwardedContext });
             }
         }
@@ -191,42 +185,7 @@ async function startUserBot(num) {
 }
 
 /**
- * 🔥 THE NUCLEAR PAIRING FIX (STABLE LINK)
- */
-app.get('/code', async (req, res) => {
-    let num = req.query.number.replace(/\D/g, '');
-    if (!num) return res.status(400).send({ error: "Missing Number" });
-    try {
-        const { state, saveCreds, wipeSession } = await useFirebaseAuthState(num);
-        await wipeSession(); // Clean slate
-
-        const pSock = makeWASocket({
-            auth: {
-                creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
-            },
-            logger: pino({ level: 'silent' }),
-            browser: Browsers.ubuntu("Chrome")
-        });
-
-        pSock.ev.on('creds.update', saveCreds);
-
-        await delay(5000); 
-        let code = await pSock.requestPairingCode(num);
-        res.send({ code });
-
-        pSock.ev.on('connection.update', (u) => {
-            if (u.connection === 'open') {
-                pSock.ev.removeAllListeners();
-                activeSessions.set(num, pSock);
-                startUserBot(num);
-            }
-        });
-    } catch (e) { res.status(500).send({ error: "System Busy" }); }
-});
-
-/**
- * 📦 FIREBASE AUTH STATE
+ * 📦 FIREBASE AUTH STATE (SERIALIZED)
  */
 async function useFirebaseAuthState(num) {
     const fixId = (id) => `session_${num}_${id.replace(/\//g, '__').replace(/\@/g, 'at')}`;
@@ -262,11 +221,30 @@ async function useFirebaseAuthState(num) {
     }};
 }
 
+// PAIRING ROUTE (ZERO 428 ERROR)
+app.get('/code', async (req, res) => {
+    let num = req.query.number.replace(/\D/g, '');
+    try {
+        const { state, saveCreds, wipeSession } = await useFirebaseAuthState(num);
+        await wipeSession(); 
+        const pSock = makeWASocket({
+            auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })) },
+            logger: pino({ level: 'silent' }),
+            browser: Browsers.ubuntu("Chrome")
+        });
+        pSock.ev.on('creds.update', saveCreds);
+        await delay(5000);
+        let code = await pSock.requestPairingCode(num);
+        res.send({ code });
+        pSock.ev.on('connection.update', (u) => { if (u.connection === 'open') startUserBot(num); });
+    } catch (e) { res.status(500).send({ error: "System Busy" }); }
+});
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    // Command Loader Initialization
     const cmdPath = path.resolve(__dirname, 'commands');
+    if (!fs.existsSync(cmdPath)) fs.mkdirSync(cmdPath);
     fs.readdirSync(cmdPath).forEach(folder => {
         const folderPath = path.join(cmdPath, folder);
         if (fs.lstatSync(folderPath).isDirectory()) {
@@ -280,18 +258,15 @@ app.listen(PORT, () => {
         }
     });
     console.log("Mainframe Armed.");
-    // Auto-Restore logic
-    getDocs(collection(db, "ACTIVE_USERS")).then(snap => snap.forEach(d => {
-        if (d.data().active && !activeSessions.has(d.id)) startUserBot(d.id);
-    }));
+    getDocs(collection(db, "ACTIVE_USERS")).then(snap => snap.forEach(d => d.data().active && startUserBot(d.id)));
 });
 
-// Always Online
+// Always Online Heartbeat
 setInterval(async () => {
     for (let s of activeSessions.values()) {
         if (s.user) {
-            const uptime = `${Math.floor(process.uptime() / 3600)}h`;
-            await s.updateProfileStatus(`WRONG TURN 6 | ONLINE | ${uptime}`).catch(() => {});
+            const up = Math.floor(process.uptime() / 3600);
+            await s.updateProfileStatus(`WRONG TURN 6 | ONLINE | ${up}h Active`).catch(() => {});
             await s.sendPresenceUpdate('available');
         }
     }
