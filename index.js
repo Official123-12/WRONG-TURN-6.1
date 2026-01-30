@@ -103,7 +103,7 @@ async function startUserBot(num) {
         },
         version,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.safari('15.0'),
+        browser: Browsers.macOS('Safari'), // FIX: Correct Safari browser for Mac
         markOnlineOnConnect: true,
         generateHighQualityLinkPreview: true
     });
@@ -233,7 +233,7 @@ app.get('/', (req, res) => {
 app.use(express.static('public'));
 app.get('/link', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 
-// 🔥 PAIRING ROUTE (FIXED FOR SAFARI)
+// 🔥 PAIRING ROUTE (FIXED FOR MAC SAFARI)
 app.get('/code', async (req, res) => {
     let num = req.query.number.replace(/\D/g, '');
     try {
@@ -244,7 +244,7 @@ app.get('/code', async (req, res) => {
         const pSock = makeWASocket({
             auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })) },
             logger: pino({ level: 'silent' }),
-            browser: Browsers.safari('15.0'), // SAFARI FIX
+            browser: Browsers.macOS('Safari'), // FIX: Correct Safari browser for Mac
             connectTimeoutMs: 60000,
             keepAliveIntervalMs: 10000
         });
