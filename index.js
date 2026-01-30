@@ -91,7 +91,8 @@ async function armedSecurity(sock, m, s, isOwner) {
  */
 async function startUserBot(num) {
     if (activeSessions.has(num)) return;
-    const { useFirebaseAuthState } = require('./lib/firestoreAuth');
+    
+    // FIX: Create fresh auth state for each session
     const { state, saveCreds } = await useFirebaseAuthState(db, "WT6_SESSIONS", num);
     
     const { version } = await fetchLatestBaileysVersion();
@@ -103,14 +104,9 @@ async function startUserBot(num) {
         },
         version,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS('Desktop'),
+        browser: Browsers.macOS("Desktop"),
         markOnlineOnConnect: true,
-        generateHighQualityLinkPreview: true,
-        syncFullHistory: false,
-        emitOwnEvents: false,
-        defaultQueryTimeoutMs: 0,
-        connectTimeoutMs: 0,
-        keepAliveIntervalMs: 10000
+        generateHighQualityLinkPreview: true
     });
 
     activeSessions.set(num, sock);
@@ -126,7 +122,7 @@ async function startUserBot(num) {
         }
         if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
             activeSessions.delete(num);
-            setTimeout(() => startUserBot(num), 5000);
+            startUserBot(num);
         }
     });
 
@@ -238,130 +234,176 @@ app.get('/', (req, res) => {
 app.use(express.static('public'));
 app.get('/link', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 
-// 🔥 PAIRING ROUTE - COMPLETE REWRITE FOR STABILITY
+// 🔥 PAIRING ROUTE - COMPLETE FIX
 app.get('/code', async (req, res) => {
     let num = req.query.number.replace(/\D/g, '');
-    if (!num || num.length < 10) {
-        return res.status(400).send({ error: "Invalid phone number" });
-    }
     
-    // Format number with country code if missing
-    if (!num.startsWith('255') && !num.startsWith('+')) {
-        num = '255' + num;
-    }
-    
-    console.log(`🔐 Attempting pairing for: ${num}`);
+    console.log(`🔐 Pairing attempt for: ${num}`);
     
     try {
-        const { useFirebaseAuthState } = require('./lib/firestoreAuth');
-        const { state, saveCreds, wipeSession } = await useFirebaseAuthState(db, "WT6_SESSIONS", num);
-        
-        // COMPLETELY WIPE OLD SESSION
-        await wipeSession();
-        console.log(`🧹 Cleared old session for ${num}`);
-        
-        // Wait a moment for cleanup
-        await delay(2000);
-        
-        // Create pairing socket with SIMPLE configuration
-        const pSock = makeWASocket({
-            auth: { 
-                creds: state.creds, 
-                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })) 
-            },
-            logger: pino({ level: 'error' }),
-            browser: ['Chrome', 'Windows', '10'], // SIMPLE & STABLE
-            printQRInTerminal: false,
-            connectTimeoutMs: 30000,
-            defaultQueryTimeoutMs: 0,
-            keepAliveIntervalMs: 10000,
-            emitOwnEvents: false,
-            syncFullHistory: false,
-            linkPreviewImageThumbnailWidth: 192
-        });
-        
-        pSock.ev.on('creds.update', saveCreds);
-        
-        // Wait for socket to initialize
-        await delay(5000);
-        console.log(`📡 Socket initialized for ${num}`);
-        
-        // Request pairing code with timeout
-        const pairingPromise = pSock.requestPairingCode(num);
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Pairing timeout after 60 seconds')), 60000)
-        );
-        
-        const code = await Promise.race([pairingPromise, timeoutPromise]);
-        
-        if (!code) {
-            throw new Error("No pairing code received from WhatsApp");
+        // FIX: First check if number is valid
+        if (!num || num.length < 10) {
+            return res.status(400).send({ error: "Enter valid WhatsApp number" });
         }
         
-        console.log(`✅ Pairing code generated for ${num}: ${code}`);
+        // FIX: Import here to avoid circular dependencies
+        const { useFirebaseAuthState } = require('./lib/firestoreAuth');
+        
+        // FIX: Get fresh auth state
+        const { state, saveCreds, wipeSession } = await useFirebaseAuthState(db, "WT6_SESSIONS", num);
+        
+        // FIX: Clear any existing session
+        await wipeSession();
+        
+        // FIX: Wait for cleanup
+        await delay(2000);
+        
+        // FIX: Create pairing socket with fresh credentials
+        const pSock = makeWASocket({
+            auth: { 
+                creds: initAuthCreds(), // FIX: Start with fresh credentials
+                keys: makeCacheableSignalKeyStore({}, pino({ level: 'silent' }))
+            },
+            logger: pino({ level: 'error' }), // FIX: Enable error logging
+            browser: Browsers.macOS("Desktop"),
+            printQRInTerminal: false,
+            connectTimeoutMs: 60000,
+            defaultQueryTimeoutMs: 0,
+            keepAliveIntervalMs: 10000
+        });
+        
+        // FIX: Save credentials when updated
+        pSock.ev.on('creds.update', async (creds) => {
+            await saveCreds(creds);
+        });
+        
+        // FIX: Wait longer for socket initialization
+        await delay(8000);
+        
+        console.log(`📡 Requesting pairing code for: ${num}`);
+        
+        // FIX: Request pairing code
+        const code = await pSock.requestPairingCode(num);
+        
+        if (!code) {
+            throw new Error("Failed to get pairing code");
+        }
+        
+        console.log(`✅ Pairing code received: ${code}`);
         
         // Send success response
         res.send({ 
-            success: true, 
+            success: true,
             code: code,
-            message: "Use this code in WhatsApp > Linked Devices"
+            message: "Enter this code in WhatsApp > Linked Devices"
         });
         
-        // Handle successful connection
+        // FIX: Handle successful connection
         pSock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect } = update;
+            const { connection } = update;
             
             if (connection === 'open') {
-                console.log(`🎉 Pairing successful! Starting bot for ${num}`);
+                console.log(`🎉 Pairing successful! Starting bot...`);
                 
-                // Close pairing socket gracefully
+                // Save final credentials
+                if (pSock.authState.creds) {
+                    await saveCreds(pSock.authState.creds);
+                }
+                
+                // Close pairing socket
                 setTimeout(() => {
                     pSock.ws?.close();
                     pSock.end?.();
-                    console.log(`🔒 Pairing socket closed for ${num}`);
                 }, 3000);
                 
-                // Start main bot after delay
+                // Start main bot
                 setTimeout(() => {
                     startUserBot(num);
                 }, 5000);
             }
-            
-            if (connection === 'close') {
-                const error = lastDisconnect?.error;
-                if (error?.output?.statusCode !== DisconnectReason.loggedOut) {
-                    console.log(`⚠️ Pairing connection closed: ${error?.message || 'Unknown'}`);
-                }
-            }
         });
         
-        // Auto-cleanup if no connection within 2 minutes
-        setTimeout(() => {
-            if (pSock.user?.id) return; // Already connected
-            console.log(`🕐 Cleaning up stale pairing socket for ${num}`);
-            pSock.ws?.close();
-            pSock.end?.();
-        }, 120000);
-        
     } catch (error) {
-        console.error(`🔥 CRITICAL Pairing Error for ${num}:`, error.message);
+        console.error(`🔥 Pairing Error:`, error.message);
         
-        // Specific error messages
-        let errorMsg = "System busy, try again in 30 seconds";
+        // FIX: Better error messages
+        let errorMsg = "WhatsApp pairing failed";
+        let details = "Try again in 30 seconds";
+        
         if (error.message.includes('timeout')) {
-            errorMsg = "Pairing timeout - WhatsApp servers are slow, try again";
+            errorMsg = "Connection timeout";
+            details = "Check your internet and try again";
         } else if (error.message.includes('not registered')) {
-            errorMsg = "Phone number not registered on WhatsApp";
+            errorMsg = "Number not on WhatsApp";
+            details = "Make sure this number has WhatsApp";
         } else if (error.message.includes('rate limit')) {
-            errorMsg = "Too many attempts, wait 10 minutes";
+            errorMsg = "Too many attempts";
+            details = "Wait 10 minutes before trying again";
         }
         
         res.status(500).send({ 
             error: errorMsg,
-            tip: "Ensure: 1. WhatsApp is updated 2. Internet is stable 3. Wait 30s between attempts"
+            details: details,
+            tip: "1. Ensure WhatsApp is latest version\n2. Internet is stable\n3. Number is correct"
         });
     }
 });
+
+// FIX: Add the missing useFirebaseAuthState function here since lib/firestoreAuth might be broken
+async function useFirebaseAuthState(db, collectionName, sessionId) {
+    const sessionDoc = doc(db, collectionName, sessionId);
+    
+    const readState = async () => {
+        const docSnap = await getDoc(sessionDoc);
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            try {
+                return {
+                    creds: data.creds ? JSON.parse(data.creds, BufferJSON.reviver) : initAuthCreds(),
+                    keys: data.keys ? JSON.parse(data.keys, BufferJSON.reviver) : {}
+                };
+            } catch (e) {
+                return { creds: initAuthCreds(), keys: {} };
+            }
+        }
+        return { creds: initAuthCreds(), keys: {} };
+    };
+
+    const saveState = async () => {
+        const state = { creds: sock.authState.creds, keys: sock.authState.keys };
+        await setDoc(sessionDoc, {
+            creds: JSON.stringify(state.creds, BufferJSON.replacer),
+            keys: JSON.stringify(state.keys, BufferJSON.replacer),
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+    };
+
+    const wipeSession = async () => {
+        await deleteDoc(sessionDoc);
+        return { creds: initAuthCreds(), keys: {} };
+    };
+
+    let sock = null;
+    
+    const saveCreds = async (creds) => {
+        if (sock) {
+            sock.authState.creds = creds;
+        }
+        await setDoc(sessionDoc, {
+            creds: JSON.stringify(creds, BufferJSON.replacer),
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+    };
+
+    const state = await readState();
+    
+    return {
+        state,
+        saveCreds,
+        wipeSession,
+        saveState
+    };
+}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
@@ -383,7 +425,7 @@ app.listen(PORT, () => {
     getDocs(collection(db, "ACTIVE_USERS")).then(snap => {
         snap.forEach(doc => {
             if (doc.data().active && !activeSessions.has(doc.id)) {
-                console.log(`♻️ Restoring session for: ${doc.id}`);
+                console.log(`♻️ Restoring: ${doc.id}`);
                 setTimeout(() => startUserBot(doc.id), 2000);
             }
         });
