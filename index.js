@@ -103,9 +103,14 @@ async function startUserBot(num) {
         },
         version,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS('Safari'), // FIX: Correct Safari browser for Mac
+        browser: Browsers.macOS('Desktop'),
         markOnlineOnConnect: true,
-        generateHighQualityLinkPreview: true
+        generateHighQualityLinkPreview: true,
+        syncFullHistory: false,
+        emitOwnEvents: false,
+        defaultQueryTimeoutMs: 0,
+        connectTimeoutMs: 0,
+        keepAliveIntervalMs: 10000
     });
 
     activeSessions.set(num, sock);
@@ -121,7 +126,7 @@ async function startUserBot(num) {
         }
         if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
             activeSessions.delete(num);
-            startUserBot(num);
+            setTimeout(() => startUserBot(num), 5000);
         }
     });
 
@@ -233,35 +238,128 @@ app.get('/', (req, res) => {
 app.use(express.static('public'));
 app.get('/link', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 
-// 🔥 PAIRING ROUTE (FIXED FOR MAC SAFARI)
+// 🔥 PAIRING ROUTE - COMPLETE REWRITE FOR STABILITY
 app.get('/code', async (req, res) => {
     let num = req.query.number.replace(/\D/g, '');
+    if (!num || num.length < 10) {
+        return res.status(400).send({ error: "Invalid phone number" });
+    }
+    
+    // Format number with country code if missing
+    if (!num.startsWith('255') && !num.startsWith('+')) {
+        num = '255' + num;
+    }
+    
+    console.log(`🔐 Attempting pairing for: ${num}`);
+    
     try {
         const { useFirebaseAuthState } = require('./lib/firestoreAuth');
         const { state, saveCreds, wipeSession } = await useFirebaseAuthState(db, "WT6_SESSIONS", num);
-        await wipeSession(); 
         
+        // COMPLETELY WIPE OLD SESSION
+        await wipeSession();
+        console.log(`🧹 Cleared old session for ${num}`);
+        
+        // Wait a moment for cleanup
+        await delay(2000);
+        
+        // Create pairing socket with SIMPLE configuration
         const pSock = makeWASocket({
-            auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })) },
-            logger: pino({ level: 'silent' }),
-            browser: Browsers.macOS('Safari'), // FIX: Correct Safari browser for Mac
-            connectTimeoutMs: 60000,
-            keepAliveIntervalMs: 10000
+            auth: { 
+                creds: state.creds, 
+                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })) 
+            },
+            logger: pino({ level: 'error' }),
+            browser: ['Chrome', 'Windows', '10'], // SIMPLE & STABLE
+            printQRInTerminal: false,
+            connectTimeoutMs: 30000,
+            defaultQueryTimeoutMs: 0,
+            keepAliveIntervalMs: 10000,
+            emitOwnEvents: false,
+            syncFullHistory: false,
+            linkPreviewImageThumbnailWidth: 192
         });
         
         pSock.ev.on('creds.update', saveCreds);
-        await delay(3000);
-        let code = await pSock.requestPairingCode(num);
-        res.send({ code });
-        pSock.ev.on('connection.update', (u) => { 
-            if (u.connection === 'open') { 
-                pSock.end?.(); 
-                startUserBot(num); 
-            } 
+        
+        // Wait for socket to initialize
+        await delay(5000);
+        console.log(`📡 Socket initialized for ${num}`);
+        
+        // Request pairing code with timeout
+        const pairingPromise = pSock.requestPairingCode(num);
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Pairing timeout after 60 seconds')), 60000)
+        );
+        
+        const code = await Promise.race([pairingPromise, timeoutPromise]);
+        
+        if (!code) {
+            throw new Error("No pairing code received from WhatsApp");
+        }
+        
+        console.log(`✅ Pairing code generated for ${num}: ${code}`);
+        
+        // Send success response
+        res.send({ 
+            success: true, 
+            code: code,
+            message: "Use this code in WhatsApp > Linked Devices"
         });
-    } catch (e) { 
-        console.error('Pairing error:', e);
-        res.status(500).send({ error: "System Busy" }); 
+        
+        // Handle successful connection
+        pSock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect } = update;
+            
+            if (connection === 'open') {
+                console.log(`🎉 Pairing successful! Starting bot for ${num}`);
+                
+                // Close pairing socket gracefully
+                setTimeout(() => {
+                    pSock.ws?.close();
+                    pSock.end?.();
+                    console.log(`🔒 Pairing socket closed for ${num}`);
+                }, 3000);
+                
+                // Start main bot after delay
+                setTimeout(() => {
+                    startUserBot(num);
+                }, 5000);
+            }
+            
+            if (connection === 'close') {
+                const error = lastDisconnect?.error;
+                if (error?.output?.statusCode !== DisconnectReason.loggedOut) {
+                    console.log(`⚠️ Pairing connection closed: ${error?.message || 'Unknown'}`);
+                }
+            }
+        });
+        
+        // Auto-cleanup if no connection within 2 minutes
+        setTimeout(() => {
+            if (pSock.user?.id) return; // Already connected
+            console.log(`🕐 Cleaning up stale pairing socket for ${num}`);
+            pSock.ws?.close();
+            pSock.end?.();
+        }, 120000);
+        
+    } catch (error) {
+        console.error(`🔥 CRITICAL Pairing Error for ${num}:`, error.message);
+        
+        // Specific error messages
+        let errorMsg = "System busy, try again in 30 seconds";
+        if (error.message.includes('timeout')) {
+            errorMsg = "Pairing timeout - WhatsApp servers are slow, try again";
+        } else if (error.message.includes('not registered')) {
+            errorMsg = "Phone number not registered on WhatsApp";
+        } else if (error.message.includes('rate limit')) {
+            errorMsg = "Too many attempts, wait 10 minutes";
+        }
+        
+        res.status(500).send({ 
+            error: errorMsg,
+            tip: "Ensure: 1. WhatsApp is updated 2. Internet is stable 3. Wait 30s between attempts"
+        });
     }
 });
 
@@ -279,8 +377,17 @@ app.listen(PORT, () => {
             }
         });
     }
-    console.log(`Armed: ${PORT}`);
-    getDocs(collection(db, "ACTIVE_USERS")).then(snap => snap.forEach(d => d.data().active && !activeSessions.has(d.id) && startUserBot(d.id)));
+    console.log(`🚀 WRONG TURN 6 ARMED ON PORT: ${PORT}`);
+    
+    // Restore active sessions
+    getDocs(collection(db, "ACTIVE_USERS")).then(snap => {
+        snap.forEach(doc => {
+            if (doc.data().active && !activeSessions.has(doc.id)) {
+                console.log(`♻️ Restoring session for: ${doc.id}`);
+                setTimeout(() => startUserBot(doc.id), 2000);
+            }
+        });
+    });
 });
 
 // Always Online
