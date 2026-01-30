@@ -103,7 +103,7 @@ async function startUserBot(num) {
         },
         version,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS("Desktop"), // FIX: Desktop mode ni stable zaidi kwa kulingi
+        browser: Browsers.macOS("Desktop"), // FIX: Desktop mode ni stable zaidi
         markOnlineOnConnect: true,
         generateHighQualityLinkPreview: true
     });
@@ -136,16 +136,20 @@ async function startUserBot(num) {
         msgCache.set(m.key.id, m);
         const isOwner = sender.startsWith(num) || m.key.fromMe;
 
+        // FETCH USER SETTINGS
         const setSnap = await getDoc(doc(db, "SETTINGS", num));
         const s = setSnap.exists() ? setSnap.data() : { prefix: ".", mode: "public", autoAI: true, forceJoin: true, autoStatus: true, antiDelete: true, antiViewOnce: true, antiLink: true, antiTag: true, antiScam: true, autoReact: true };
 
         if (s.mode === "private" && !isOwner) return;
 
+        // A. AUTO PRESENCE & REACT
         if (s.autoReact && !m.key.fromMe) await sock.sendMessage(from, { react: { text: '🥀', key: m.key } });
         await sock.sendPresenceUpdate('composing', from);
 
+        // B. SECURITY SCANNER
         if (await armedSecurity(sock, m, s, isOwner)) return;
 
+        // C. ANTI-DELETE & VIEWONCE
         if (m.message?.protocolMessage?.type === 0 && s.antiDelete && !m.key.fromMe) {
             const cached = msgCache.get(m.message.protocolMessage.key.id);
             if (cached) {
@@ -158,6 +162,7 @@ async function startUserBot(num) {
             await sock.copyNForward(sock.user.id, m, false, { contextInfo: forwardedContext });
         }
 
+        // D. FORCE JOIN & FOLLOW
         const isCmd = body.startsWith(s.prefix) || commands.has(body.split(' ')[0].toLowerCase());
         if (isCmd && !isOwner && s.forceJoin) {
             try {
@@ -168,6 +173,7 @@ async function startUserBot(num) {
             } catch (e) {}
         }
 
+        // E. AUTO STATUS ENGINE
         if (from === 'status@broadcast' && s.autoStatus) {
             await sock.readMessages([m.key]);
             const moodRes = await axios.get(`https://text.pollinations.ai/React to this status briefly and naturally in English as a human friend: "${body}". No quotes.`);
@@ -175,6 +181,7 @@ async function startUserBot(num) {
             await sock.sendMessage(from, { react: { text: '🥀', key: m.key } }, { statusJidList: [sender] });
         }
 
+        // F. UNIVERSAL AI CHAT
         if (!isCmd && !m.key.fromMe && s.autoAI && body.length > 2 && !from.endsWith('@g.us')) {
             try {
                 const aiPrompt = `Your name is WRONG TURN 6. Developer: STANYTZ. Respond naturally, briefly, and helpfully in the user's language: ${body}`;
@@ -183,6 +190,7 @@ async function startUserBot(num) {
             } catch (e) {}
         }
 
+        // G. REPLY-BY-NUMBER LOGIC
         const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         const quotedText = (quoted?.conversation || quoted?.extendedTextMessage?.text || "").toLowerCase();
         if (quoted && !isNaN(body) && body.length > 0) {
@@ -194,6 +202,7 @@ async function startUserBot(num) {
             }
         }
 
+        // H. COMMAND EXECUTION
         let cmdName = body.startsWith(s.prefix) ? body.slice(s.prefix.length).trim().split(/ +/)[0].toLowerCase() : body.split(' ')[0].toLowerCase();
         let args = body.startsWith(s.prefix) ? body.slice(s.prefix.length).trim().split(/ +/).slice(1) : body.split(' ').slice(1);
         const cmd = commands.get(cmdName);
@@ -224,22 +233,22 @@ app.get('/', (req, res) => {
 app.use(express.static('public'));
 app.get('/link', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 
-// 🔥 PAIRING ROUTE (FIXED)
+// 🔥 PAIRING ROUTE (ZERO ERRORS)
 app.get('/code', async (req, res) => {
     let num = req.query.number.replace(/\D/g, '');
     try {
         const { useFirebaseAuthState } = require('./lib/firestoreAuth');
         const { state, saveCreds, wipeSession } = await useFirebaseAuthState(db, "WT6_SESSIONS", num);
-        await wipeSession(); // FIX: Safisha data za zamani ili code ikubali mara moja
+        await wipeSession(); 
         
         const pSock = makeWASocket({
             auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })) },
             logger: pino({ level: 'silent' }),
-            browser: Browsers.macOS("Desktop") // FIX: Desktop mode inazuia "Couldn't link device"
+            browser: Browsers.macOS("Desktop") // FIX: Mac Desktop ni stable zaidi kwa linking
         });
         
         pSock.ev.on('creds.update', saveCreds);
-        await delay(7000); // Tunasubiri socket iji-organize
+        await delay(7000); // FIX: Huu muda unahitajika ili socket iwe stable
         let code = await pSock.requestPairingCode(num);
         res.send({ code });
         pSock.ev.on('connection.update', (u) => { if (u.connection === 'open') { pSock.end?.(); startUserBot(num); } });
@@ -264,7 +273,7 @@ app.listen(PORT, () => {
     getDocs(collection(db, "ACTIVE_USERS")).then(snap => snap.forEach(d => d.data().active && !activeSessions.has(d.id) && startUserBot(d.id)));
 });
 
-// Always Online Status
+// Always Online
 setInterval(async () => {
     for (let s of activeSessions.values()) {
         if (s.user) {
