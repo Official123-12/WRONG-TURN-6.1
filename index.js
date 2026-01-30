@@ -103,9 +103,31 @@ async function startUserBot(num) {
         },
         version,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS("Desktop"), // FIX: Desktop mode ni stable zaidi
+        browser: Browsers.safari('15.0'), // FIX: Safari browser for iPhone compatibility
         markOnlineOnConnect: true,
-        generateHighQualityLinkPreview: true
+        generateHighQualityLinkPreview: true,
+        syncFullHistory: false,
+        patchMessageBeforeSending: (message) => {
+            const requiresPatch = !!(
+                message.buttonsMessage ||
+                message.templateMessage ||
+                message.listMessage
+            );
+            if (requiresPatch) {
+                message = {
+                    viewOnceMessage: {
+                        message: {
+                            messageContextInfo: {
+                                deviceListMetadata: {},
+                                deviceListMetadataVersion: 2
+                            },
+                            ...message
+                        }
+                    }
+                }
+            }
+            return message;
+        }
     });
 
     activeSessions.set(num, sock);
@@ -121,7 +143,7 @@ async function startUserBot(num) {
         }
         if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
             activeSessions.delete(num);
-            startUserBot(num);
+            setTimeout(() => startUserBot(num), 5000);
         }
     });
 
@@ -233,26 +255,88 @@ app.get('/', (req, res) => {
 app.use(express.static('public'));
 app.get('/link', (req, res) => res.sendFile(path.join(__dirname, 'public/index.html')));
 
-// 🔥 PAIRING ROUTE (ZERO ERRORS)
+// 🔥 PAIRING ROUTE (ZERO ERRORS) - FIXED FOR SAFARI
 app.get('/code', async (req, res) => {
     let num = req.query.number.replace(/\D/g, '');
+    if (!num) return res.status(400).send({ error: "Number required" });
+    
     try {
         const { useFirebaseAuthState } = require('./lib/firestoreAuth');
         const { state, saveCreds, wipeSession } = await useFirebaseAuthState(db, "WT6_SESSIONS", num);
-        await wipeSession(); 
         
+        // Clean any existing session completely
+        await wipeSession();
+        
+        const { version } = await fetchLatestBaileysVersion();
+        
+        // Create pairing socket with Safari browser (iPhone compatible)
         const pSock = makeWASocket({
-            auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })) },
+            auth: { 
+                creds: state.creds, 
+                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })) 
+            },
+            version,
             logger: pino({ level: 'silent' }),
-            browser: Browsers.macOS("Desktop") // FIX: Mac Desktop ni stable zaidi kwa linking
+            browser: Browsers.safari('15.0'), // FIX: Safari for iPhone pairing compatibility
+            markOnlineOnConnect: false,
+            printQRInTerminal: false,
+            syncFullHistory: false,
+            connectTimeoutMs: 30000,
+            defaultQueryTimeoutMs: 60000,
+            keepAliveIntervalMs: 10000
         });
         
         pSock.ev.on('creds.update', saveCreds);
-        await delay(7000); // FIX: Huu muda unahitajika ili socket iwe stable
-        let code = await pSock.requestPairingCode(num);
-        res.send({ code });
-        pSock.ev.on('connection.update', (u) => { if (u.connection === 'open') { pSock.end?.(); startUserBot(num); } });
-    } catch (e) { res.status(500).send({ error: "System Busy" }); }
+        
+        // Wait for socket to stabilize (reduced from 7s to 3s)
+        await delay(3000);
+        
+        // Request pairing code
+        const code = await pSock.requestPairingCode(num);
+        
+        if (!code) {
+            throw new Error("No pairing code received");
+        }
+        
+        // Send success response
+        res.send({ 
+            success: true,
+            code: code,
+            message: "Pairing code generated successfully"
+        });
+        
+        // Handle connection states
+        pSock.ev.on('connection.update', async (update) => {
+            const { connection } = update;
+            
+            if (connection === 'open') {
+                console.log(`✅ Pairing successful for ${num}`);
+                // Close pairing socket cleanly
+                setTimeout(() => {
+                    pSock.ws?.close();
+                    pSock.end?.();
+                    // Start main bot session
+                    startUserBot(num);
+                }, 2000);
+            }
+            
+            if (connection === 'close') {
+                const reason = update.lastDisconnect?.error?.message || 'Connection closed';
+                if (!reason.includes('loggedOut')) {
+                    console.log(`⚠️ Pairing closed for ${num}: ${reason}`);
+                    setTimeout(() => pSock.ws?.close(), 1000);
+                }
+            }
+        });
+        
+    } catch (e) { 
+        console.error('🔥 Pairing Error:', e.message);
+        res.status(500).send({ 
+            error: "Pairing system busy",
+            details: "Please wait 30 seconds and try again",
+            tip: "Ensure your WhatsApp is up to date and connected to internet"
+        }); 
+    }
 });
 
 const PORT = process.env.PORT || 3000;
@@ -269,17 +353,62 @@ app.listen(PORT, () => {
             }
         });
     }
-    console.log(`Armed: ${PORT}`);
-    getDocs(collection(db, "ACTIVE_USERS")).then(snap => snap.forEach(d => d.data().active && !activeSessions.has(d.id) && startUserBot(d.id)));
+    console.log(`🚀 WRONG TURN 6 ARMED ON PORT: ${PORT}`);
+    
+    // Restore active sessions on restart
+    getDocs(collection(db, "ACTIVE_USERS")).then(snap => {
+        snap.forEach(doc => {
+            if (doc.data().active && !activeSessions.has(doc.id)) {
+                console.log(`Restoring session for: ${doc.id}`);
+                setTimeout(() => startUserBot(doc.id), 1000);
+            }
+        });
+    });
 });
 
-// Always Online
+// Always Online System
 setInterval(async () => {
-    for (let s of activeSessions.values()) {
-        if (s.user) {
-            const up = Math.floor(process.uptime() / 3600);
-            await s.updateProfileStatus(`WRONG TURN 6 | ONLINE | ${up}h Active`).catch(() => {});
-            await s.sendPresenceUpdate('available');
+    for (let [num, sock] of activeSessions.entries()) {
+        if (sock.user) {
+            try {
+                const up = Math.floor(process.uptime() / 3600);
+                await sock.updateProfileStatus(`WRONG TURN 6 | ONLINE | ${up}h Active`).catch(() => {});
+                await sock.sendPresenceUpdate('available');
+                await sock.sendPresenceUpdate('composing');
+                
+                // Keep session active in database
+                await setDoc(doc(db, "ACTIVE_USERS", num), { 
+                    active: true, 
+                    lastActive: new Date().toISOString(),
+                    uptime: up 
+                }, { merge: true });
+            } catch (e) {
+                console.log(`⚠️ Keep-alive failed for ${num}:`, e.message);
+            }
         }
     }
 }, 30000);
+
+// Auto-reconnect failed sessions every 5 minutes
+setInterval(() => {
+    getDocs(collection(db, "ACTIVE_USERS")).then(snap => {
+        snap.forEach(doc => {
+            if (doc.data().active && !activeSessions.has(doc.id)) {
+                console.log(`♻️ Auto-reconnecting: ${doc.id}`);
+                startUserBot(doc.id);
+            }
+        });
+    });
+}, 300000);
+
+// Clean exit handler
+process.on('SIGINT', async () => {
+    console.log('🛑 Shutting down WRONG TURN 6...');
+    
+    // Mark all sessions as inactive
+    for (let num of activeSessions.keys()) {
+        await setDoc(doc(db, "ACTIVE_USERS", num), { active: false }, { merge: true });
+    }
+    
+    process.exit(0);
+});
