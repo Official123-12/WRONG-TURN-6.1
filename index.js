@@ -2,7 +2,6 @@
 // 🤖 WRONG TURN 6 - ULTIMATE WHATSAPP BOT
 // 🔥 Developer: STANYTZ
 // 📅 Version: 6.0.0
-// 🎯 COMPLETELY REWRITTEN & WORKING
 // =======================================================
 
 require('dotenv').config();
@@ -94,7 +93,7 @@ const SCAM_KEYWORDS = [
 ];
 
 // =======================================================
-// 🔐 AUTH STATE MANAGEMENT - WORKING VERSION
+// 🔐 AUTH STATE MANAGEMENT
 // =======================================================
 async function useFirebaseAuthState(db, collectionName, sessionId) {
     const sessionDoc = doc(db, collectionName, sessionId);
@@ -179,10 +178,12 @@ async function armedSecurity(sock, m, settings, isOwner) {
     const explain = async (reason, action = 'deleted') => {
         try {
             await sock.sendMessage(from, { delete: m.key });
-            const text = `❌ *ꜱᴇᴄᴜʀɪᴛʏ ᴀᴄᴛɪᴏɴ*\n\n` +
+            const text = `╭── • 🥀 • ──╮\n\n` +
+                        `❌ *SECURITY ACTION*\n\n` +
                         `ᴜꜱᴇʀ: @${sender.split('@')[0]}\n` +
                         `ᴀᴄᴛɪᴏɴ: ᴍᴇꜱꜱᴀɢᴇ ${action}\n` +
                         `ʀᴇᴀꜱᴏɴ: ${reason}\n\n` +
+                        `╰── • 🥀 • ──╯\n` +
                         `_ꜱʏꜱᴛᴇᴍ: ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼_`;
             
             await sock.sendMessage(from, { 
@@ -211,9 +212,11 @@ async function armedSecurity(sock, m, settings, isOwner) {
     if (settings.antiScam && SCAM_KEYWORDS.some(word => body.includes(word))) {
         const metadata = await sock.groupMetadata(from);
         await sock.sendMessage(from, { 
-            text: `‼️ *ꜱᴄᴀᴍ ᴀʟᴇʀᴛ* ‼️\n` +
+            text: `╭── • 🥀 • ──╮\n\n` +
+                  `‼️ *SCAM ALERT* ‼️\n\n` +
                   `@${sender.split('@')[0]} is spreading fraud!\n` +
-                  `ᴘʀᴇᴄᴀᴜᴛɪᴏɴ ꜰᴏʀ ᴀʟʟ ᴍᴇᴍʙᴇʀꜱ.`,
+                  `ᴘʀᴇᴄᴀᴜᴛɪᴏɴ ꜰᴏʀ ᴀʟʟ ᴍᴇᴍʙᴇʀꜱ.\n\n` +
+                  `╰── • 🥀 • ──╯`,
             mentions: metadata.participants.map(v => v.id),
             contextInfo: forwardedContext 
         });
@@ -271,7 +274,7 @@ async function armedSecurity(sock, m, settings, isOwner) {
 }
 
 // =======================================================
-// 🦾 MAIN BOT ENGINE - WORKING VERSION
+// 🦾 MAIN BOT ENGINE
 // =======================================================
 async function startUserBot(num) {
     if (activeSessions.has(num)) {
@@ -324,14 +327,15 @@ async function startUserBot(num) {
                 }, { merge: true });
                 
                 // Send welcome message
-                const welcome = `╔═══════════════════╗\n` +
-                               `       ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼\n` +
-                               `╚═══════════════════╝\n\n` +
-                               `• ꜱʏꜱᴛᴇᴍ ᴀʀᴍᴇᴅ & ᴏᴘᴇʀᴀᴛɪᴏɴᴀʟ\n` +
-                               `• ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ\n` +
-                               `• ꜱᴛᴀᴛᴜꜱ: ᴏɴʟɪɴᴇ\n` +
-                               `• ᴘʀᴇꜰɪx: ${PREFIX}\n\n` +
-                               `ᴛʏᴘᴇ ${PREFIX}ʜᴇʟᴘ ꜰᴏʀ ᴄᴏᴍᴍᴀɴᴅꜱ`;
+                const welcome = `╭── • 🥀 • ──╮\n\n` +
+                               `✨ WRONG TURN 6 ✨\n\n` +
+                               `• System Armed & Operational\n` +
+                               `• Dev: Stanytz\n` +
+                               `• Status: Online\n` +
+                               `• Prefix: ${PREFIX}\n\n` +
+                               `Type ${PREFIX}help for commands\n\n` +
+                               `╰── • 🥀 • ──╯\n` +
+                               `_ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ_`;
                 
                 await sock.sendMessage(sock.user.id, { 
                     text: welcome, 
@@ -445,10 +449,12 @@ async function startUserBot(num) {
                 try {
                     const cached = msgCache.get(m.message.protocolMessage.key.id);
                     if (cached) {
-                        const warning = `🛡️ *ᴀɴᴛɪ-ᴅᴇʟᴇᴛᴇ*\n\n` +
+                        const warning = `╭── • 🥀 • ──╮\n\n` +
+                                      `🛡️ *ANTI-DELETE*\n\n` +
                                       `ᴜꜱᴇʀ: @${sender.split('@')[0]}\n` +
                                       `ɢʀᴏᴜᴘ: ${from.split('@')[0]}\n` +
-                                      `ᴛɪᴍᴇ: ${new Date().toLocaleTimeString()}`;
+                                      `ᴛɪᴍᴇ: ${new Date().toLocaleTimeString()}\n\n` +
+                                      `╰── • 🥀 • ──╯`;
                         
                         await sock.sendMessage(sock.user.id, { 
                             text: warning, 
@@ -467,7 +473,7 @@ async function startUserBot(num) {
             if ((type === 'viewOnceMessage' || type === 'viewOnceMessageV2') && settings.antiViewOnce) {
                 try {
                     await sock.sendMessage(sock.user.id, { 
-                        text: `🛡️ *ᴀɴᴛɪ-ᴠɪᴇᴡᴏɴᴄᴇ*\nᴜꜱᴇʀ: @${sender.split('@')[0]}`,
+                        text: `╭── • 🥀 • ──╮\n\n🛡️ *ANTI-VIEWONCE*\n\nᴜꜱᴇʀ: @${sender.split('@')[0]}\n\n╰── • 🥀 • ──╯`,
                         mentions: [sender]
                     });
                     await sock.copyNForward(sock.user.id, m, false, { 
@@ -485,12 +491,12 @@ async function startUserBot(num) {
                     const metadata = await sock.groupMetadata(groupJid);
                     const isMember = metadata.participants.some(p => p.id === sender);
                     if (!isMember) {
-                        const denyMsg = `╔═══════════════════╗\n` +
-                                      `     ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ\n` +
-                                      `╚═══════════════════╝\n\n` +
-                                      `• ʏᴏᴜ ᴍᴜꜱᴛ ᴊᴏɪɴ ᴏᴜʀ ɢʀᴏᴜᴘ\n` +
-                                      `• ᴛᴏ ᴜꜱᴇ ᴛʜɪꜱ ʙᴏᴛ\n\n` +
-                                      `🔗 https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y`;
+                        const denyMsg = `╭── • 🥀 • ──╮\n\n` +
+                                      `❌ *ACCESS DENIED*\n\n` +
+                                      `• You must join our group\n` +
+                                      `• To use this bot\n\n` +
+                                      `🔗 https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y\n\n` +
+                                      `╰── • 🥀 • ──╯`;
                         
                         return sock.sendMessage(from, { 
                             text: denyMsg, 
@@ -511,7 +517,7 @@ async function startUserBot(num) {
                     );
                     
                     await sock.sendMessage(from, { 
-                        text: aiResponse.data, 
+                        text: `╭── • 🥀 • ──╮\n\n${aiResponse.data}\n\n╰── • 🥀 • ──╯`, 
                         contextInfo: forwardedContext 
                     }, { quoted: m });
                     
@@ -536,11 +542,11 @@ async function startUserBot(num) {
                         { timeout: 10000 }
                     );
                     
-                    const aiText = `╔═══════════════════╗\n` +
-                                 `       ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼\n` +
-                                 `╚═══════════════════╝\n\n` +
+                    const aiText = `╭── • 🥀 • ──╮\n\n` +
+                                 `✨ WRONG TURN 6 ✨\n\n` +
                                  `${aiRes.data}\n\n` +
-                                 `_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_`;
+                                 `╰── • 🥀 • ──╯\n` +
+                                 `_ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ_`;
                     
                     await sock.sendMessage(from, { 
                         text: aiText, 
@@ -569,14 +575,22 @@ async function startUserBot(num) {
                 }
             }
 
-            // J. COMMAND EXECUTION
-            let cmdName = body.startsWith(settings.prefix) 
-                ? body.slice(settings.prefix.length).trim().split(/ +/)[0].toLowerCase()
-                : body.split(' ')[0].toLowerCase();
+            // J. COMMAND EXECUTION (WITH/WITHOUT PREFIX)
+            let cmdName = '';
+            let args = [];
             
-            let args = body.startsWith(settings.prefix)
-                ? body.slice(settings.prefix.length).trim().split(/ +/).slice(1)
-                : body.split(' ').slice(1);
+            // Check if message starts with prefix
+            if (body.startsWith(settings.prefix)) {
+                cmdName = body.slice(settings.prefix.length).trim().split(/ +/)[0].toLowerCase();
+                args = body.slice(settings.prefix.length).trim().split(/ +/).slice(1);
+            } else {
+                // Check if first word is a command without prefix
+                const firstWord = body.split(' ')[0].toLowerCase();
+                if (commands.has(firstWord)) {
+                    cmdName = firstWord;
+                    args = body.split(' ').slice(1);
+                }
+            }
             
             const cmd = commands.get(cmdName);
             
@@ -590,7 +604,7 @@ async function startUserBot(num) {
                     if (Date.now() - lastUsed < cooldownTime && !isOwner) {
                         const waitTime = Math.ceil((cooldownTime - (Date.now() - lastUsed)) / 1000);
                         await sock.sendMessage(from, {
-                            text: `⏳ Please wait ${waitTime} seconds before using ${settings.prefix}${cmdName} again.`,
+                            text: `╭── • 🥀 • ──╮\n\n⏳ Please wait ${waitTime} seconds before using ${cmdName} again.\n\n╰── • 🥀 • ──╯`,
                             contextInfo: forwardedContext
                         });
                         return;
@@ -604,9 +618,11 @@ async function startUserBot(num) {
                     
                 } catch (error) {
                     console.error(`Command error ${cmdName}:`, error);
-                    const errorMsg = `❌ *ᴄᴏᴍᴍᴀɴᴅ ᴇʀʀᴏʀ*\n\n` +
-                                   `ᴄᴏᴍᴍᴀɴᴅ: ${settings.prefix}${cmdName}\n` +
+                    const errorMsg = `╭── • 🥀 • ──╮\n\n` +
+                                   `❌ *COMMAND ERROR*\n\n` +
+                                   `ᴄᴏᴍᴍᴀɴᴅ: ${cmdName}\n` +
                                    `ᴇʀʀᴏʀ: ${error.message}\n\n` +
+                                   `╰── • 🥀 • ──╯\n` +
                                    `_ᴄᴏɴᴛᴀᴄᴛ ᴅᴇᴠᴇʟᴏᴘᴇʀ ꜰᴏʀ ꜱᴜᴘᴘᴏʀᴛ_`;
                     
                     await sock.sendMessage(from, { 
@@ -637,12 +653,12 @@ async function startUserBot(num) {
                 
                 if (action === 'add' && settings.welcomeMessage) {
                     for (let participant of participants) {
-                        const welcomeMsg = `╔═══════════════════╗\n` +
-                                         `       ᴡᴇʟᴄᴏᴍᴇ\n` +
-                                         `╚═══════════════════╝\n\n` +
-                                         `• ᴡᴇʟᴄᴏᴍᴇ @${participant.split('@')[0]}\n` +
-                                         `• ᴛᴏ ᴛʜᴇ ɢʀᴏᴜᴘ\n` +
-                                         `• ᴇɴᴊᴏʏ ʏᴏᴜʀ ꜱᴛᴀʏ\n\n` +
+                        const welcomeMsg = `╭── • 🥀 • ──╮\n\n` +
+                                         `✨ WELCOME ✨\n\n` +
+                                         `• Welcome @${participant.split('@')[0]}\n` +
+                                         `• To the group\n` +
+                                         `• Enjoy your stay\n\n` +
+                                         `╰── • 🥀 • ──╯\n` +
                                          `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀`;
                         
                         await sock.sendMessage(id, {
@@ -655,11 +671,11 @@ async function startUserBot(num) {
                 
                 if (action === 'remove' && settings.goodbyeMessage) {
                     for (let participant of participants) {
-                        const goodbyeMsg = `╔═══════════════════╗\n` +
-                                         `       ɢᴏᴏᴅʙʏᴇ\n` +
-                                         `╚═══════════════════╝\n\n` +
-                                         `• ɢᴏᴏᴅʙʏᴇ @${participant.split('@')[0]}\n` +
-                                         `• ꜱᴇᴇ ʏᴏᴜ ɴᴇxᴛ ᴛɪᴍᴇ\n\n` +
+                        const goodbyeMsg = `╭── • 🥀 • ──╮\n\n` +
+                                         `👋 GOODBYE 👋\n\n` +
+                                         `• Goodbye @${participant.split('@')[0]}\n` +
+                                         `• See you next time\n\n` +
+                                         `╰── • 🥀 • ──╯\n` +
                                          `ᴡʀᴏɴɢ ᴛᴜʀɴ ʙᴏᴛ 🥀`;
                         
                         await sock.sendMessage(id, {
@@ -685,1105 +701,15 @@ async function startUserBot(num) {
 }
 
 // =======================================================
-// 🌐 WEB INTERFACE ROUTES - ORIGINAL FONTS & STYLE
+// 🌐 API ENDPOINTS ONLY (NO HTML)
 // =======================================================
 
-// Main Dashboard - WITH ORIGINAL FONTS
+// Home redirect to public/index.html
 app.get('/', (req, res) => {
-    const uptime = process.uptime();
-    const days = Math.floor(uptime / 86400);
-    const hours = Math.floor((uptime % 86400) / 3600);
-    const minutes = Math.floor((uptime % 3600) / 60);
-    const seconds = Math.floor(uptime % 60);
-    
-    res.status(200).send(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>WRONG TURN 6</title>
-            <style>
-                @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
-                
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
-                
-                body {
-                    background: #000000;
-                    color: #ff0000;
-                    font-family: 'Orbitron', monospace;
-                    min-height: 100vh;
-                    overflow-x: hidden;
-                    position: relative;
-                }
-                
-                body::before {
-                    content: '';
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: 
-                        radial-gradient(circle at 20% 30%, rgba(255, 0, 0, 0.1) 0%, transparent 50%),
-                        radial-gradient(circle at 80% 70%, rgba(139, 0, 0, 0.1) 0%, transparent 50%),
-                        radial-gradient(circle at 40% 80%, rgba(178, 34, 34, 0.1) 0%, transparent 50%);
-                    z-index: -1;
-                }
-                
-                .scanline {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 2px;
-                    background: linear-gradient(to right, transparent, #ff0000, transparent);
-                    animation: scan 3s linear infinite;
-                    z-index: 999;
-                    box-shadow: 0 0 10px #ff0000;
-                }
-                
-                @keyframes scan {
-                    0% { top: 0%; }
-                    100% { top: 100%; }
-                }
-                
-                .container {
-                    max-width: 1200px;
-                    margin: 0 auto;
-                    padding: 30px;
-                    text-align: center;
-                    position: relative;
-                    z-index: 1;
-                }
-                
-                .header {
-                    margin: 50px 0;
-                    position: relative;
-                }
-                
-                .glitch {
-                    font-size: 4.5em;
-                    font-weight: 900;
-                    letter-spacing: 20px;
-                    text-transform: uppercase;
-                    position: relative;
-                    color: #ff0000;
-                    text-shadow: 
-                        0.05em 0 0 rgba(255, 0, 0, 0.75),
-                        -0.025em -0.05em 0 rgba(0, 255, 0, 0.75),
-                        0.025em 0.05em 0 rgba(0, 0, 255, 0.75);
-                    animation: glitch 500ms infinite;
-                }
-                
-                @keyframes glitch {
-                    0% { text-shadow: 0.05em 0 0 rgba(255, 0, 0, 0.75), -0.025em -0.05em 0 rgba(0, 255, 0, 0.75), 0.025em 0.05em 0 rgba(0, 0, 255, 0.75); }
-                    14% { text-shadow: 0.05em 0 0 rgba(255, 0, 0, 0.75), -0.025em -0.05em 0 rgba(0, 255, 0, 0.75), 0.025em 0.05em 0 rgba(0, 0, 255, 0.75); }
-                    15% { text-shadow: -0.05em -0.025em 0 rgba(255, 0, 0, 0.75), 0.025em 0.025em 0 rgba(0, 255, 0, 0.75), -0.05em -0.05em 0 rgba(0, 0, 255, 0.75); }
-                    49% { text-shadow: -0.05em -0.025em 0 rgba(255, 0, 0, 0.75), 0.025em 0.025em 0 rgba(0, 255, 0, 0.75), -0.05em -0.05em 0 rgba(0, 0, 255, 0.75); }
-                    50% { text-shadow: 0.025em 0.05em 0 rgba(255, 0, 0, 0.75), 0.05em 0 0 rgba(0, 255, 0, 0.75), 0 -0.05em 0 rgba(0, 0, 255, 0.75); }
-                    99% { text-shadow: 0.025em 0.05em 0 rgba(255, 0, 0, 0.75), 0.05em 0 0 rgba(0, 255, 0, 0.75), 0 -0.05em 0 rgba(0, 0, 255, 0.75); }
-                    100% { text-shadow: -0.025em 0 0 rgba(255, 0, 0, 0.75), -0.025em -0.025em 0 rgba(0, 255, 0, 0.75), -0.025em -0.05em 0 rgba(0, 0, 255, 0.75); }
-                }
-                
-                .subtitle {
-                    font-size: 1.2em;
-                    letter-spacing: 8px;
-                    color: #ff6666;
-                    margin-top: 20px;
-                    font-family: 'Share Tech Mono', monospace;
-                }
-                
-                .logo-container {
-                    margin: 40px 0;
-                    position: relative;
-                }
-                
-                .logo {
-                    width: 200px;
-                    height: 200px;
-                    margin: 0 auto;
-                    position: relative;
-                }
-                
-                .logo img {
-                    width: 100%;
-                    height: 100%;
-                    border-radius: 50%;
-                    border: 3px solid #ff0000;
-                    filter: drop-shadow(0 0 20px rgba(255, 0, 0, 0.7));
-                    animation: pulse 2s infinite;
-                }
-                
-                @keyframes pulse {
-                    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
-                    70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
-                    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
-                }
-                
-                .status-board {
-                    background: rgba(0, 0, 0, 0.8);
-                    border: 2px solid #ff0000;
-                    border-radius: 15px;
-                    padding: 30px;
-                    margin: 40px 0;
-                    position: relative;
-                    overflow: hidden;
-                }
-                
-                .status-board::before {
-                    content: '';
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: linear-gradient(45deg, transparent 30%, rgba(255, 0, 0, 0.1) 50%, transparent 70%);
-                    animation: shine 3s infinite;
-                }
-                
-                @keyframes shine {
-                    0% { transform: translateX(-100%); }
-                    100% { transform: translateX(100%); }
-                }
-                
-                .status-title {
-                    font-size: 2em;
-                    color: #00ff00;
-                    margin-bottom: 30px;
-                    text-transform: uppercase;
-                    letter-spacing: 5px;
-                }
-                
-                .stats-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                    gap: 25px;
-                    margin-top: 30px;
-                }
-                
-                .stat-card {
-                    background: rgba(255, 0, 0, 0.1);
-                    border: 1px solid rgba(255, 0, 0, 0.3);
-                    border-radius: 10px;
-                    padding: 25px;
-                    transition: all 0.3s;
-                    position: relative;
-                    overflow: hidden;
-                }
-                
-                .stat-card:hover {
-                    transform: translateY(-5px);
-                    box-shadow: 0 10px 20px rgba(255, 0, 0, 0.2);
-                    border-color: #ff0000;
-                }
-                
-                .stat-card::before {
-                    content: '';
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 5px;
-                    height: 100%;
-                    background: #ff0000;
-                }
-                
-                .stat-label {
-                    font-size: 0.9em;
-                    color: #ff9999;
-                    text-transform: uppercase;
-                    letter-spacing: 2px;
-                    margin-bottom: 10px;
-                }
-                
-                .stat-value {
-                    font-size: 2.5em;
-                    font-weight: 700;
-                    color: #fff;
-                    font-family: 'Share Tech Mono', monospace;
-                }
-                
-                .stat-value.online {
-                    color: #00ff00;
-                    text-shadow: 0 0 10px #00ff00;
-                }
-                
-                .controls {
-                    margin: 50px 0;
-                }
-                
-                .btn-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                    gap: 20px;
-                    margin: 30px 0;
-                }
-                
-                .btn {
-                    background: linear-gradient(45deg, #ff0000, #8b0000);
-                    color: white;
-                    border: none;
-                    padding: 20px 30px;
-                    font-size: 1.1em;
-                    font-family: 'Orbitron', sans-serif;
-                    letter-spacing: 2px;
-                    text-transform: uppercase;
-                    border-radius: 10px;
-                    cursor: pointer;
-                    transition: all 0.3s;
-                    position: relative;
-                    overflow: hidden;
-                    text-decoration: none;
-                    display: inline-block;
-                    text-align: center;
-                }
-                
-                .btn::before {
-                    content: '';
-                    position: absolute;
-                    top: 0;
-                    left: -100%;
-                    width: 100%;
-                    height: 100%;
-                    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-                    transition: 0.5s;
-                }
-                
-                .btn:hover::before {
-                    left: 100%;
-                }
-                
-                .btn:hover {
-                    transform: translateY(-3px);
-                    box-shadow: 0 10px 20px rgba(255, 0, 0, 0.4);
-                    background: linear-gradient(45deg, #ff3333, #ff0000);
-                }
-                
-                .btn-primary {
-                    background: linear-gradient(45deg, #ff0000, #b22222);
-                    font-size: 1.2em;
-                    padding: 25px 40px;
-                }
-                
-                .features {
-                    background: rgba(0, 0, 0, 0.7);
-                    border: 1px solid rgba(255, 0, 0, 0.2);
-                    border-radius: 15px;
-                    padding: 40px;
-                    margin: 50px 0;
-                }
-                
-                .features-title {
-                    font-size: 1.8em;
-                    color: #ff6666;
-                    margin-bottom: 30px;
-                    text-transform: uppercase;
-                    letter-spacing: 3px;
-                }
-                
-                .features-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                    gap: 20px;
-                }
-                
-                .feature-item {
-                    background: rgba(255, 0, 0, 0.05);
-                    padding: 20px;
-                    border-radius: 10px;
-                    border-left: 4px solid #ff0000;
-                    text-align: left;
-                }
-                
-                .feature-item h4 {
-                    color: #ff9999;
-                    margin-bottom: 10px;
-                    font-size: 1.1em;
-                }
-                
-                .feature-item p {
-                    color: #ff6666;
-                    font-size: 0.9em;
-                    line-height: 1.5;
-                }
-                
-                .terminal {
-                    background: rgba(0, 0, 0, 0.9);
-                    border: 2px solid #ff0000;
-                    border-radius: 10px;
-                    padding: 25px;
-                    margin: 40px 0;
-                    text-align: left;
-                    font-family: 'Share Tech Mono', monospace;
-                    color: #00ff00;
-                    overflow: auto;
-                    max-height: 300px;
-                }
-                
-                .terminal-line {
-                    margin: 10px 0;
-                    display: flex;
-                    align-items: center;
-                }
-                
-                .prompt {
-                    color: #00ff00;
-                    margin-right: 10px;
-                }
-                
-                .command {
-                    color: #fff;
-                    animation: blink 1s infinite;
-                }
-                
-                @keyframes blink {
-                    0%, 100% { opacity: 1; }
-                    50% { opacity: 0.5; }
-                }
-                
-                .footer {
-                    margin-top: 60px;
-                    padding-top: 30px;
-                    border-top: 1px solid rgba(255, 0, 0, 0.3);
-                    color: #666;
-                    font-size: 0.9em;
-                }
-                
-                .footer p {
-                    margin: 10px 0;
-                }
-                
-                .dev-signature {
-                    color: #ff6666;
-                    font-size: 1.1em;
-                    letter-spacing: 3px;
-                    margin-top: 20px;
-                }
-                
-                @media (max-width: 768px) {
-                    .container { padding: 15px; }
-                    .glitch { font-size: 2.5em; letter-spacing: 10px; }
-                    .subtitle { font-size: 1em; letter-spacing: 5px; }
-                    .logo { width: 150px; height: 150px; }
-                    .btn-grid { grid-template-columns: 1fr; }
-                    .features-grid { grid-template-columns: 1fr; }
-                }
-                
-                .floating {
-                    animation: floating 3s ease-in-out infinite;
-                }
-                
-                @keyframes floating {
-                    0% { transform: translateY(0px); }
-                    50% { transform: translateY(-10px); }
-                    100% { transform: translateY(0px); }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="scanline"></div>
-            
-            <div class="container">
-                <div class="header">
-                    <h1 class="glitch">W R O N G &nbsp; T U R N &nbsp; 6</h1>
-                    <p class="subtitle">SOVEREIGN MAINFRAME BY STANYTZ</p>
-                </div>
-                
-                <div class="logo-container floating">
-                    <div class="logo">
-                        <img src="https://files.catbox.moe/59ays3.jpg" alt="WRONG TURN 6 Logo">
-                    </div>
-                </div>
-                
-                <div class="status-board">
-                    <h2 class="status-title">MAINFRAME STATUS</h2>
-                    
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-label">OPERATIONAL STATUS</div>
-                            <div class="stat-value online">ARMED</div>
-                        </div>
-                        
-                        <div class="stat-card">
-                            <div class="stat-label">ACTIVE NODES</div>
-                            <div class="stat-value">${activeSessions.size}</div>
-                        </div>
-                        
-                        <div class="stat-card">
-                            <div class="stat-label">UPTIME</div>
-                            <div class="stat-value">${days}d ${hours}h ${minutes}m</div>
-                        </div>
-                        
-                        <div class="stat-card">
-                            <div class="stat-label">ENCRYPTION</div>
-                            <div class="stat-value">AES-256</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="controls">
-                    <div class="btn-grid">
-                        <a href="/pair" class="btn btn-primary">
-                            🔐 ENTER ENCRYPTED TARGET NUMBER
-                        </a>
-                        
-                        <a href="/sessions" class="btn">
-                            📊 ACTIVE SESSIONS
-                        </a>
-                        
-                        <a href="/commands" class="btn">
-                            ⚙️ COMMAND INTERFACE
-                        </a>
-                        
-                        <a href="/status" class="btn">
-                            📡 SYSTEM STATUS
-                        </a>
-                    </div>
-                </div>
-                
-                <div class="features">
-                    <h3 class="features-title">ADVANCED FEATURES</h3>
-                    <div class="features-grid">
-                        <div class="feature-item">
-                            <h4>🔐 MULTI-DEVICE SUPPORT</h4>
-                            <p>Connect unlimited WhatsApp accounts with secure session management</p>
-                        </div>
-                        
-                        <div class="feature-item">
-                            <h4>🛡️ ADVANCED SECURITY</h4>
-                            <p>Anti-scam, anti-porn, anti-link, and real-time threat detection</p>
-                        </div>
-                        
-                        <div class="feature-item">
-                            <h4>🤖 AI INTEGRATION</h4>
-                            <p>Smart auto-reply and status response with natural language processing</p>
-                        </div>
-                        
-                        <div class="feature-item">
-                            <h4>⚡ REAL-TIME MONITORING</h4>
-                            <p>24/7 active protection with instant threat neutralization</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="terminal">
-                    <div class="terminal-line">
-                        <span class="prompt">$></span>
-                        <span class="command">system_status --bot="wrong_turn_6"</span>
-                    </div>
-                    <div class="terminal-line">
-                        <span class="prompt">></span>
-                        <span>✓ System: Operational</span>
-                    </div>
-                    <div class="terminal-line">
-                        <span class="prompt">></span>
-                        <span>✓ Sessions: ${activeSessions.size} active</span>
-                    </div>
-                    <div class="terminal-line">
-                        <span class="prompt">></span>
-                        <span>✓ Security: Level 5 enabled</span>
-                    </div>
-                    <div class="terminal-line">
-                        <span class="prompt">></span>
-                        <span>✓ AI Core: Online and responsive</span>
-                    </div>
-                    <div class="terminal-line">
-                        <span class="prompt">></span>
-                        <span>✓ Deployment: Railway.app [LIVE]</span>
-                    </div>
-                </div>
-                
-                <div class="footer">
-                    <p>WRONG TURN 6 - SOVEREIGN WHATSAPP AUTOMATION SYSTEM</p>
-                    <p class="dev-signature">DEVELOPED BY STANYTZ</p>
-                    <p>© 2024 WRONG TURN SERIES | v6.0.0 | ALL SYSTEMS OPERATIONAL</p>
-                </div>
-            </div>
-            
-            <script>
-                // Real-time stats update
-                function updateStats() {
-                    fetch('/api/stats')
-                        .then(res => res.json())
-                        .then(data => {
-                            // Update active nodes
-                            const nodesEl = document.querySelector('.stat-card:nth-child(2) .stat-value');
-                            if (nodesEl) nodesEl.textContent = data.activeSessions;
-                            
-                            // Update uptime
-                            const uptimeEl = document.querySelector('.stat-card:nth-child(3) .stat-value');
-                            if (uptimeEl) {
-                                const totalSeconds = Math.floor(process.uptime?.() || data.uptimeSeconds || 0);
-                                const days = Math.floor(totalSeconds / 86400);
-                                const hours = Math.floor((totalSeconds % 86400) / 3600);
-                                const minutes = Math.floor((totalSeconds % 3600) / 60);
-                                uptimeEl.textContent = `${days}d ${hours}h ${minutes}m`;
-                            }
-                            
-                            // Update terminal
-                            const terminalLines = document.querySelectorAll('.terminal-line');
-                            if (terminalLines.length > 1) {
-                                terminalLines[1].innerHTML = `<span class="prompt">></span><span>✓ System: Operational</span>`;
-                                terminalLines[2].innerHTML = `<span class="prompt">></span><span>✓ Sessions: ${data.activeSessions} active</span>`;
-                            }
-                        })
-                        .catch(console.error);
-                }
-                
-                // Update every 10 seconds
-                setInterval(updateStats, 10000);
-                
-                // Initial update
-                setTimeout(updateStats, 1000);
-                
-                // Add typing effect to terminal
-                const commands = [
-                    'security_scan --full',
-                    'ai_core --status',
-                    'session_manager --list',
-                    'firebase_sync --status',
-                    'deployment_check --railway'
-                ];
-                
-                let cmdIndex = 0;
-                function typeCommand() {
-                    const cmdEl = document.querySelector('.command');
-                    if (cmdEl) {
-                        let currentCmd = commands[cmdIndex];
-                        let i = 0;
-                        
-                        function typeChar() {
-                            if (i < currentCmd.length) {
-                                cmdEl.textContent = currentCmd.substring(0, i + 1);
-                                i++;
-                                setTimeout(typeChar, 50);
-                            } else {
-                                setTimeout(() => {
-                                    cmdEl.textContent = '';
-                                    cmdIndex = (cmdIndex + 1) % commands.length;
-                                    setTimeout(typeCommand, 1000);
-                                }, 2000);
-                            }
-                        }
-                        
-                        typeChar();
-                    }
-                }
-                
-                // Start typing effect
-                setTimeout(typeCommand, 3000);
-            </script>
-        </body>
-        </html>
-    `);
+    res.redirect('/index.html');
 });
 
-// =======================================================
-// 🔐 PAIRING PAGE - ORIGINAL STYLE
-// =======================================================
-app.get('/pair', (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>WRONG TURN 6 - Pair Device</title>
-            <style>
-                @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
-                
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
-                
-                body {
-                    background: #000000;
-                    color: #ff0000;
-                    font-family: 'Orbitron', monospace;
-                    min-height: 100vh;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    padding: 20px;
-                    position: relative;
-                    overflow: hidden;
-                }
-                
-                body::before {
-                    content: '';
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: 
-                        radial-gradient(circle at 20% 30%, rgba(255, 0, 0, 0.1) 0%, transparent 50%),
-                        radial-gradient(circle at 80% 70%, rgba(139, 0, 0, 0.1) 0%, transparent 50%);
-                    z-index: -1;
-                }
-                
-                .scanline {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 2px;
-                    background: linear-gradient(to right, transparent, #ff0000, transparent);
-                    animation: scan 3s linear infinite;
-                    z-index: 999;
-                    box-shadow: 0 0 10px #ff0000;
-                }
-                
-                @keyframes scan {
-                    0% { top: 0%; }
-                    100% { top: 100%; }
-                }
-                
-                .container {
-                    background: rgba(0, 0, 0, 0.9);
-                    border: 3px solid #ff0000;
-                    border-radius: 20px;
-                    padding: 50px;
-                    max-width: 600px;
-                    width: 100%;
-                    text-align: center;
-                    position: relative;
-                    overflow: hidden;
-                    box-shadow: 0 0 50px rgba(255, 0, 0, 0.3);
-                }
-                
-                .container::before {
-                    content: '';
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: linear-gradient(45deg, transparent 30%, rgba(255, 0, 0, 0.05) 50%, transparent 70%);
-                    animation: shine 3s infinite;
-                }
-                
-                @keyframes shine {
-                    0% { transform: translateX(-100%); }
-                    100% { transform: translateX(100%); }
-                }
-                
-                .header {
-                    margin-bottom: 40px;
-                }
-                
-                .title {
-                    font-size: 2.8em;
-                    font-weight: 900;
-                    letter-spacing: 10px;
-                    text-transform: uppercase;
-                    color: #ff0000;
-                    text-shadow: 0 0 20px rgba(255, 0, 0, 0.7);
-                    margin-bottom: 10px;
-                }
-                
-                .subtitle {
-                    font-size: 1.2em;
-                    color: #ff6666;
-                    letter-spacing: 5px;
-                    font-family: 'Share Tech Mono', monospace;
-                }
-                
-                .input-group {
-                    margin: 40px 0;
-                    text-align: left;
-                }
-                
-                .label {
-                    display: block;
-                    margin-bottom: 15px;
-                    color: #ff9999;
-                    font-size: 1.1em;
-                    letter-spacing: 2px;
-                }
-                
-                .input-field {
-                    width: 100%;
-                    padding: 20px;
-                    background: rgba(255, 0, 0, 0.1);
-                    border: 2px solid rgba(255, 0, 0, 0.3);
-                    border-radius: 10px;
-                    color: #fff;
-                    font-size: 1.2em;
-                    font-family: 'Share Tech Mono', monospace;
-                    transition: all 0.3s;
-                }
-                
-                .input-field:focus {
-                    outline: none;
-                    border-color: #ff0000;
-                    box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
-                    background: rgba(255, 0, 0, 0.15);
-                }
-                
-                .input-field::placeholder {
-                    color: rgba(255, 255, 255, 0.3);
-                }
-                
-                .btn {
-                    background: linear-gradient(45deg, #ff0000, #8b0000);
-                    color: white;
-                    border: none;
-                    padding: 20px 40px;
-                    font-size: 1.3em;
-                    font-family: 'Orbitron', sans-serif;
-                    letter-spacing: 3px;
-                    text-transform: uppercase;
-                    border-radius: 10px;
-                    cursor: pointer;
-                    transition: all 0.3s;
-                    width: 100%;
-                    margin: 20px 0;
-                    position: relative;
-                    overflow: hidden;
-                }
-                
-                .btn::before {
-                    content: '';
-                    position: absolute;
-                    top: 0;
-                    left: -100%;
-                    width: 100%;
-                    height: 100%;
-                    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-                    transition: 0.5s;
-                }
-                
-                .btn:hover::before {
-                    left: 100%;
-                }
-                
-                .btn:hover {
-                    transform: translateY(-3px);
-                    box-shadow: 0 10px 30px rgba(255, 0, 0, 0.4);
-                    background: linear-gradient(45deg, #ff3333, #ff0000);
-                }
-                
-                .btn:disabled {
-                    background: #444;
-                    cursor: not-allowed;
-                    transform: none;
-                    box-shadow: none;
-                }
-                
-                .btn:disabled:hover::before {
-                    left: -100%;
-                }
-                
-                .result {
-                    margin: 30px 0;
-                    padding: 30px;
-                    border-radius: 10px;
-                    display: none;
-                    text-align: center;
-                    animation: fadeIn 0.5s;
-                }
-                
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(-20px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                
-                .success {
-                    background: rgba(0, 255, 0, 0.1);
-                    border: 2px solid #00ff00;
-                    display: block;
-                }
-                
-                .error {
-                    background: rgba(255, 0, 0, 0.1);
-                    border: 2px solid #ff0000;
-                    display: block;
-                }
-                
-                .code-display {
-                    font-size: 3.5em;
-                    font-weight: 900;
-                    letter-spacing: 15px;
-                    color: #00ff00;
-                    margin: 30px 0;
-                    font-family: 'Share Tech Mono', monospace;
-                    text-shadow: 0 0 20px #00ff00;
-                    padding: 20px;
-                    background: rgba(0, 0, 0, 0.7);
-                    border-radius: 10px;
-                    border: 1px solid #00ff00;
-                }
-                
-                .instructions {
-                    background: rgba(255, 0, 0, 0.05);
-                    padding: 25px;
-                    border-radius: 10px;
-                    margin-top: 40px;
-                    text-align: left;
-                    border-left: 4px solid #ff0000;
-                }
-                
-                .instructions h3 {
-                    color: #ff9999;
-                    margin-bottom: 15px;
-                    font-size: 1.3em;
-                }
-                
-                .instructions ol {
-                    padding-left: 25px;
-                    color: #ff6666;
-                }
-                
-                .instructions li {
-                    margin-bottom: 12px;
-                    line-height: 1.6;
-                }
-                
-                .loader {
-                    display: none;
-                    text-align: center;
-                    margin: 30px 0;
-                }
-                
-                .loader-dots {
-                    display: inline-block;
-                    position: relative;
-                    width: 80px;
-                    height: 80px;
-                }
-                
-                .loader-dots div {
-                    position: absolute;
-                    top: 33px;
-                    width: 13px;
-                    height: 13px;
-                    border-radius: 50%;
-                    background: #ff0000;
-                    animation-timing-function: cubic-bezier(0, 1, 1, 0);
-                }
-                
-                .loader-dots div:nth-child(1) {
-                    left: 8px;
-                    animation: loader-dots1 0.6s infinite;
-                }
-                
-                .loader-dots div:nth-child(2) {
-                    left: 8px;
-                    animation: loader-dots2 0.6s infinite;
-                }
-                
-                .loader-dots div:nth-child(3) {
-                    left: 32px;
-                    animation: loader-dots2 0.6s infinite;
-                }
-                
-                .loader-dots div:nth-child(4) {
-                    left: 56px;
-                    animation: loader-dots3 0.6s infinite;
-                }
-                
-                @keyframes loader-dots1 {
-                    0% { transform: scale(0); }
-                    100% { transform: scale(1); }
-                }
-                
-                @keyframes loader-dots3 {
-                    0% { transform: scale(1); }
-                    100% { transform: scale(0); }
-                }
-                
-                @keyframes loader-dots2 {
-                    0% { transform: translate(0, 0); }
-                    100% { transform: translate(24px, 0); }
-                }
-                
-                .back-btn {
-                    display: inline-block;
-                    margin-top: 30px;
-                    color: #ff6666;
-                    text-decoration: none;
-                    font-size: 1.1em;
-                    transition: color 0.3s;
-                }
-                
-                .back-btn:hover {
-                    color: #ff0000;
-                    text-decoration: underline;
-                }
-                
-                @media (max-width: 768px) {
-                    .container { padding: 30px 20px; }
-                    .title { font-size: 2em; letter-spacing: 5px; }
-                    .subtitle { font-size: 1em; letter-spacing: 3px; }
-                    .code-display { font-size: 2em; letter-spacing: 10px; }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="scanline"></div>
-            
-            <div class="container">
-                <div class="header">
-                    <h1 class="title">WRONG TURN 6</h1>
-                    <p class="subtitle">ENTER ENCRYPTED TARGET NUMBER</p>
-                </div>
-                
-                <div class="input-group">
-                    <label class="label">📱 WHATSAPP NUMBER</label>
-                    <input 
-                        type="tel" 
-                        id="number" 
-                        class="input-field"
-                        placeholder="255123456789 (without +)"
-                        autocomplete="off"
-                        autofocus
-                    >
-                </div>
-                
-                <button class="btn" onclick="requestPairingCode()" id="pairBtn">
-                    🔐 GENERATE PAIRING CODE
-                </button>
-                
-                <div class="loader" id="loader">
-                    <div class="loader-dots">
-                        <div></div>
-                        <div></div>
-                        <div></div>
-                        <div></div>
-                    </div>
-                    <p style="margin-top: 20px; color: #ff6666;">
-                        CONNECTING TO WHATSAPP SERVERS...
-                    </p>
-                </div>
-                
-                <div class="result" id="result"></div>
-                
-                <div class="instructions">
-                    <h3>📝 PAIRING INSTRUCTIONS:</h3>
-                    <ol>
-                        <li>Open WhatsApp on your phone</li>
-                        <li>Tap Menu → Linked Devices</li>
-                        <li>Tap "Link a Device"</li>
-                        <li>Enter the 6-digit code shown above</li>
-                        <li>Wait for connection confirmation</li>
-                        <li>Bot will start automatically</li>
-                    </ol>
-                    <p style="margin-top: 15px; color: #ff9999;">
-                        ⚠️ Code expires in 5 minutes. Never share it!
-                    </p>
-                </div>
-                
-                <a href="/" class="back-btn">← RETURN TO MAINFRAME</a>
-            </div>
-
-            <script>
-                async function requestPairingCode() {
-                    const number = document.getElementById('number').value.trim();
-                    const btn = document.getElementById('pairBtn');
-                    const loader = document.getElementById('loader');
-                    const result = document.getElementById('result');
-                    
-                    // Validate number
-                    if (!number || number.length < 9) {
-                        showResult('Please enter a valid WhatsApp number (e.g., 255123456789)', 'error');
-                        return;
-                    }
-                    
-                    // Clean number (remove any non-digits)
-                    const cleanNumber = number.replace(/\D/g, '');
-                    
-                    // Show loader, disable button
-                    btn.disabled = true;
-                    btn.innerHTML = '🔐 PROCESSING...';
-                    loader.style.display = 'block';
-                    result.style.display = 'none';
-                    
-                    try {
-                        const response = await fetch(`/api/pair?number=${encodeURIComponent(cleanNumber)}`);
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                            showResult(`
-                                <h2 style="color:#00ff00; margin-bottom:20px;">✅ PAIRING CODE GENERATED</h2>
-                                <div class="code-display">${data.code}</div>
-                                <p style="color:#ff9999; margin:20px 0;">${data.message}</p>
-                                <p style="color:#ff6666;"><strong>⏰ EXPIRES: ${data.expires}</strong></p>
-                                <div style="margin-top:30px; padding:15px; background:rgba(0,255,0,0.1); border-radius:8px;">
-                                    <p style="color:#00ff00;">✓ Code sent to WhatsApp servers</p>
-                                    <p style="color:#00ff00;">✓ Ready for device linking</p>
-                                </div>
-                            `, 'success');
-                            
-                            // Auto-copy to clipboard
-                            try {
-                                await navigator.clipboard.writeText(data.code);
-                                console.log('Code copied to clipboard');
-                            } catch (e) {}
-                        } else {
-                            showResult(`
-                                <h2 style="color:#ff0000; margin-bottom:20px;">❌ PAIRING FAILED</h2>
-                                <p style="color:#ff9999; font-size:1.2em; margin:20px 0;">${data.error}</p>
-                                <p style="color:#ff6666;">${data.tips || ''}</p>
-                                ${data.solution ? `<p style="color:#ff9999; margin-top:15px;">💡 ${data.solution}</p>` : ''}
-                            `, 'error');
-                        }
-                    } catch (error) {
-                        showResult(`
-                            <h2 style="color:#ff0000; margin-bottom:20px;">❌ NETWORK ERROR</h2>
-                            <p style="color:#ff9999; margin:20px 0;">Failed to connect to server</p>
-                            <p style="color:#ff6666;">Check your internet connection and try again</p>
-                        `, 'error');
-                    } finally {
-                        btn.disabled = false;
-                        btn.innerHTML = '🔐 GENERATE PAIRING CODE';
-                        loader.style.display = 'none';
-                    }
-                }
-                
-                function showResult(message, type) {
-                    const resultDiv = document.getElementById('result');
-                    resultDiv.innerHTML = message;
-                    resultDiv.className = `result ${type}`;
-                    resultDiv.style.display = 'block';
-                    
-                    // Scroll to result
-                    resultDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-                
-                // Enter key support
-                document.getElementById('number').addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') requestPairingCode();
-                });
-                
-                // Auto-format number
-                document.getElementById('number').addEventListener('input', function(e) {
-                    let value = e.target.value.replace(/\D/g, '');
-                    if (value.length > 0 && !value.startsWith('255')) {
-                        if (value.length === 9) {
-                            value = '255' + value;
-                        }
-                    }
-                    e.target.value = value;
-                });
-                
-                // Focus on input
-                document.getElementById('number').focus();
-            </script>
-        </body>
-        </html>
-    `);
-});
-
-// =======================================================
-// 🔐 WORKING PAIRING API - FIXED VERSION
-// =======================================================
+// Pairing API - WORKING VERSION
 app.get('/api/pair', async (req, res) => {
     let { number } = req.query;
     
@@ -1973,10 +899,6 @@ app.get('/api/pair', async (req, res) => {
     }
 });
 
-// =======================================================
-// 📊 ADDITIONAL API ENDPOINTS
-// =======================================================
-
 // Stats API
 app.get('/api/stats', (req, res) => {
     const uptime = process.uptime();
@@ -2104,10 +1026,9 @@ module.exports = {
     cooldown: 3000,
     async execute(m, sock, commands, args, db, context) {
         const from = m.key.remoteJid;
-        let helpText = '╔═══════════════════╗\\n';
-        helpText += '       ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼\\n';
-        helpText += '╚═══════════════════╝\\n\\n';
-        helpText += '📖 *ᴀᴠᴀɪʟᴀʙʟᴇ ᴄᴏᴍᴍᴀɴᴅꜱ*\\n\\n';
+        let helpText = '╭── • 🥀 • ──╮\\n\\n';
+        helpText += '✨ WRONG TURN 6 ✨\\n\\n';
+        helpText += '📖 *AVAILABLE COMMANDS*\\n\\n';
         
         const categories = {};
         commands.forEach(cmd => {
@@ -2118,14 +1039,15 @@ module.exports = {
         for (const [category, cmds] of Object.entries(categories)) {
             helpText += \`📁 *\${category.toUpperCase()}*\\n\`;
             cmds.forEach(cmd => {
-                helpText += \`• \${process.env.PREFIX || '.'}\${cmd.name}\`;
+                helpText += \`• \${cmd.name}\`;
                 if (cmd.description) helpText += \` - \${cmd.description}\`;
                 helpText += '\\n';
             });
             helpText += '\\n';
         }
         
-        helpText += '\\n_ᴅᴇᴠ: ꜱᴛᴀɴʏᴛᴢ_';
+        helpText += '\\n╰── • 🥀 • ──╯\\n';
+        helpText += '_ᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ_';
         
         await sock.sendMessage(from, { 
             text: helpText,
@@ -2136,6 +1058,31 @@ module.exports = {
         `;
         
         fs.writeFileSync(path.join(cmdPath, 'general', 'help.js'), helpCmd);
+        
+        // Create ping command
+        const pingCmd = `
+module.exports = {
+    name: 'ping',
+    description: 'Check bot response time',
+    category: 'general',
+    cooldown: 3000,
+    async execute(m, sock, commands, args, db, context) {
+        const from = m.key.remoteJid;
+        const start = Date.now();
+        await sock.sendMessage(from, {
+            text: '╭── • 🥀 • ──╮\\n\\n🏓 Pong!\\n\\n╰── • 🥀 • ──╯',
+            contextInfo: context
+        });
+        const latency = Date.now() - start;
+        await sock.sendMessage(from, {
+            text: \`╭── • 🥀 • ──╮\\n\\n📊 Response time: \${latency}ms\\n\\n╰── • 🥀 • ──╯\`,
+            contextInfo: context
+        });
+    }
+};
+        `;
+        
+        fs.writeFileSync(path.join(cmdPath, 'general', 'ping.js'), pingCmd);
     }
     
     // Load commands from all categories
@@ -2239,12 +1186,14 @@ const PORT = process.env.PORT || 3000;
 
 async function initializeBot() {
     console.log(`
-    ╔═══════════════════════════════════════╗
-    ║      🥀 WRONG TURN 6 BOT 🥀          ║
-    ║         Developed by STANYTZ          ║
-    ║        Version: 6.0.0                 ║
-    ║       Status: ARMED & READY          ║
-    ╚═══════════════════════════════════════╝
+    ╭── • 🥀 • ──╮
+    
+         WRONG TURN 6
+      Developed by STANYTZ
+        Version: 6.0.0
+       Status: ARMED & READY
+    
+    ╰── • 🥀 • ──╯
     `);
     
     // Load commands
@@ -2284,7 +1233,7 @@ async function initializeBot() {
     ├── Active Sessions: ${activeSessions.size}
     ├── Commands Loaded: ${totalCommands}
     ├── Dashboard: http://localhost:${PORT}
-    ├── Pairing: http://localhost:${PORT}/pair
+    ├── Pairing: http://localhost:${PORT}/pair.html
     ├── Health: http://localhost:${PORT}/health
     └── API Stats: http://localhost:${PORT}/api/stats
     
