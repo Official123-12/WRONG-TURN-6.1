@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WRONG TURN 6 - PAIRING</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            color: #ff0000;
+            font-family: monospace;
+            text-align: center;
+            padding: 50px;
+            background-image: url('https://www.transparenttextures.com/patterns/black-paper.png');
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 30px;
+            border: 2px solid #ff0000;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.9);
+            box-shadow: 0 0 50px rgba(255,0,0,0.3);
+        }
+        h1 {
+            margin-bottom: 30px;
+            letter-spacing: 5px;
+            text-shadow: 0 0 10px #ff0000;
+        }
+        input {
+            width: 100%;
+            padding: 15px;
+            margin: 20px 0;
+            background: #111;
+            color: #fff;
+            border: 1px solid #ff0000;
+            border-radius: 5px;
+            font-size: 18px;
+            text-align: center;
+        }
+        button {
+            background: #ff0000;
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 20px 0;
+            transition: 0.3s;
+        }
+        button:hover {
+            background: #ff3333;
+            box-shadow: 0 0 20px #ff0000;
+        }
+        #result {
+            margin-top: 30px;
+            padding: 20px;
+            background: #111;
+            border-radius: 10px;
+            border: 1px solid #ff0000;
+            min-height: 100px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .steps {
+            text-align: left;
+            margin: 30px 0;
+            padding: 20px;
+            background: #111;
+            border-radius: 10px;
+            border-left: 5px solid #ff0000;
+        }
+        .step {
+            margin: 15px 0;
+            color: #aaa;
+            display: flex;
+            align-items: center;
+        }
+        .step-num {
+            background: #ff0000;
+            color: #000;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-weight: bold;
+        }
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ff0000;
+            text-decoration: none;
+            font-size: 18px;
+        }
+        .back-btn:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-btn">← BACK</a>
+    
+    <div class="container">
+        <h1>🔗 WRONG TURN 6 PAIRING</h1>
+        <p style="color:#888;margin-bottom:30px;">Developed by STANYTZ | Worldwide</p>
+        
+        <div class="steps">
+            <div class="step">
+                <div class="step-num">1</div>
+                <div>Enter your phone number (international format)</div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div>Click "GENERATE CODE"</div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div>Open WhatsApp → Settings → Linked Devices</div>
+            </div>
+            <div class="step">
+                <div class="step-num">4</div>
+                <div>Click "Link a Device" and enter the code</div>
+            </div>
+            <div class="step">
+                <div class="step-num">5</div>
+                <div>Bot will start automatically</div>
+            </div>
+        </div>
+        
+        <input type="text" id="number" placeholder="254712345678" maxlength="15" />
+        
+        <button onclick="generateCode()">🔗 GENERATE CODE</button>
+        <button onclick="resetForm()" style="background:#333;color:#fff;margin-left:10px;">🔄 RESET</button>
+        
+        <div id="result">Enter number and click GENERATE</div>
+    </div>
+    
+    <script>
+        async function generateCode() {
+            const num = document.getElementById('number').value.replace(/\D/g, '');
+            if (!num || num.length < 10) {
+                alert('Enter valid phone number (e.g., 254712345678)');
+                return;
+            }
+            
+            document.getElementById('result').innerHTML = '⏳ Generating pairing code...';
+            
+            try {
+                const response = await fetch('/code?number=' + num);
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('result').innerHTML = 
+                        `❌ ERROR: ${data.error}\n\nMake sure:\n1. Number is in international format\n2. WhatsApp is active on your phone\n3. You have internet connection`;
+                    return;
+                }
+                
+                document.getElementById('result').innerHTML = 
+                    `✅ PAIRING CODE GENERATED!\n\n📱 CODE: ${data.code}\n\n📋 Instructions:\n1. Open WhatsApp on your phone\n2. Go to Settings → Linked Devices\n3. Click "Link a Device"\n4. Enter this code: ${data.code}\n5. Bot will start automatically\n\n💡 Code expires in 2 minutes`;
+                
+            } catch (error) {
+                document.getElementById('result').innerHTML = 
+                    `❌ SYSTEM ERROR: ${error.message}\n\nTry again in 30 seconds`;
+            }
+        }
+        
+        function resetForm() {
+            document.getElementById('number').value = '';
+            document.getElementById('result').innerHTML = 'Enter number and click GENERATE';
+        }
+        
+        document.getElementById('number').focus();
+    </script>
+</body>
+</html>
