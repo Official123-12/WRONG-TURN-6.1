@@ -1,43 +1,37 @@
-#  WRONG TURN 6
-<p align="center">
-  <img src="https://files.catbox.moe/59ays3.jpg" width="550" height="200" style="border-radius: 50%;">
-</p>
+# WRONG TURN 6 - WORLDWIDE WHATSAPP BOT 🌍🥀
 
-<p align="center">
-<marquee width="80%" behavior="alternate" scrollamount="5">
-  <b> 🚀 WRONG TURN 6 - MULTI DEVICE WHATSAPP BOT | DEVELOPED BY STANYTZ | POWERED BY FIREBASE 🚀 </b>
-</marquee>
-</p>
+Advanced WhatsApp Bot with worldwide support, ready for deployment on any platform.
 
----
+## Features:
+- 🌍 Works worldwide (all countries)
+- 🥀 Beautiful flower theme
+- 🔗 Easy pairing system
+- 🔒 Advanced security
+- 🤖 Auto AI responses
+- 🛡️ Anti-delete, anti-viewonce
+- ⚡ Fast & reliable
 
-## 🌟 DESCRIPTION
-**WRONG TURN 6** is a high-end, modular WhatsApp automation engine built with Node.js and the Baileys library. It features a professional **iOS 26 UI** for pairing, **Firebase Firestore** for persistent session storage, and an obsidian-themed vertical menu.
+## Deployment:
+1. **Heroku**: Just push to Heroku
+2. **Railway**: Import GitHub repo
+3. **Render**: Deploy from Git
+4. **Vercel**: Deploy as serverless
+5. **Any VPS**: Node.js 18+
 
----
+## Setup:
+1. Clone this repo
+2. Run `npm install`
+3. Set up Firebase (optional)
+4. Run `node index.js`
+5. Visit `/pair` to pair your number
 
-## 🌹 SPECIAL APPRECIATION
-<p align="center">
-  <b>Big thanks to Ibrahim Adams 🇰🇪</b><br>
-  For the technical inspiration and support in the development of this architecture.
-</p>
+## Commands:
+- `.ping` - Check latency
+- `.help` - Show all commands
+- More in commands folder
 
----
+## Developer:
+**STANYTZ** - Worldwide Bot Specialist
 
-## 🛠️ KEY FEATURES
-- [x] **Always Online:** Stays active 24/7 via Firebase.
-- [x] **Pairing System:** Link via phone number with iOS 26 UI.
-- [x] **Anti-Link:** Auto-delete group invitation links.
-- [x] **Anti-Porn:** Blocks and removes explicit content.
-- [x] **Anti-Call:** Automatically blocks incoming calls for security.
-- [x] **Auto-Status:** Automatically views and likes (🥀) contacts' statuses.
-- [x] **Dynamic Loader:** Commands are grouped automatically by folder name.
-
----
-
-## 🚀 DEPLOYMENT STEPS
-
-1. **Clone the project:**
-   ```bash
-   git clone https://github.com/stanytz/wrong-turn-6
-   cd wrong-turn-6
+## Support:
+Join: https://chat.whatsapp.com/J19JASXoaK0GVSoRvShr4Y
