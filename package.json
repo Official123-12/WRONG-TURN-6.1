@@ -1,26 +1,36 @@
 {
-  "name": "wrong-turn-6-global",
-  "version": "6.0.0",
-  "description": "Worldwide WhatsApp Bot",
+  "name": "wrong-turn-6-supreme",
+  "version": "1.0.5",
+  "description": "Ultimate Supreme Multi-User WhatsApp Bot with Advanced Security, AI, and Dynamic Menu",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "baileys",
+    "xmd-baileys",
+    "wrong-turn",
+    "supreme",
+    "multi-user"
+  ],
+  "author": "StanyTz",
+  "license": "ISC",
   "dependencies": {
-    "xmd-baileys": "^1.0.5",
-    "express": "^4.18.2",
-    "pino": "^8.15.0",
+    "@whiskeysockets/baileys": "npm:xmd-baileys@^1.0.5",
     "axios": "^1.6.0",
-    "fs-extra": "^11.1.1",
     "dotenv": "^16.3.1",
-    "firebase": "^10.5.0",
+    "express": "^4.18.2",
+    "firebase": "^10.7.0",
+    "fs-extra": "^11.1.1",
+    "pino": "^8.16.0",
+    "path": "^0.12.7",
     "qrcode-terminal": "^0.12.0"
   },
   "engines": {
     "node": ">=16.0.0"
-  },
-  "keywords": ["whatsapp-bot", "bot", "wrong-turn", "stanytz"],
-  "author": "STANYTZ",
-  "license": "MIT"
+  }
 }
