@@ -1,21 +1,18 @@
 require('dotenv').config();
 const { 
     default: makeWASocket, DisconnectReason, Browsers, delay, getContentType, 
-    makeCacheableSignalKeyStore, jidDecode, proto 
+    makeCacheableSignalKeyStore, jidDecode 
 } = require('xmd-baileys');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, initializeFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, query, where } = require('firebase/firestore');
+const { getFirestore, initializeFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc } = require('firebase/firestore');
 const express = require('express');
 const path = require('path');
 const fs = require('fs-extra');
 const pino = require('pino');
 const axios = require('axios');
+const { kishuwa, newsContext } = require('./lib/supremeUI');
 
-// --- IDENTITY & FIREBASE ---
-const DEVELOPER = "StanyTz";
-const NEWSLETTER_JID = '120363404317544295@newsletter';
-const OFFICIAL_GROUP = '120363406549688641@g.us';
-
+// --- FIREBASE ---
 const firebaseConfig = {
     apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
     authDomain: "stanybots.firebaseapp.com",
@@ -24,7 +21,6 @@ const firebaseConfig = {
     messagingSenderId: "381983533939",
     appId: "1:381983533939:web:e6cc9445137c74b99df306"
 };
-
 const firebaseApp = initializeApp(firebaseConfig);
 const db = initializeFirestore(firebaseApp, { experimentalForceLongPolling: true, useFetchStreams: false });
 
@@ -32,19 +28,9 @@ const app = express();
 const commands = new Map();
 const sessions = new Map();
 const msgCache = new Map();
+const OFFICIAL_GROUP = '120363406549688641@g.us';
 
-// --- PREMIUM FONTS ---
-const kishuwa = (text) => {
-    const fonts = {'a':'ᴀ','b':'ʙ','c':'ᴄ','d':'ᴅ','e':'ᴇ','f':'ꜰ','g':'ɢ','h':'ʜ','i':'ɪ','j':'ᴊ','k':'ᴋ','l':'ʟ','m':'ᴍ','n':'ɴ','o':'ᴏ','p':'ᴘ','q':'ǫ','r':'ʀ','s':'s','t':'ᴛ','u':'ᴜ','v':'ᴠ','w':'ᴡ','x':'x','y':'ʏ','z':'ᴢ'};
-    return text.toString().toLowerCase().split('').map(char => fonts[char] || char).join('');
-};
-
-const newsContext = {
-    forwardingScore: 999, isForwarded: true,
-    forwardedNewsletterMessageInfo: { newsletterJid: NEWSLETTER_JID, serverMessageId: 1, newsletterName: 'ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀' }
-};
-
-// --- DYNAMIC COMMAND LOADER ---
+// --- COMMAND LOADER ---
 const loadCommands = () => {
     try {
         const cmdPath = path.join(__dirname, 'commands');
@@ -62,12 +48,12 @@ const loadCommands = () => {
                 });
             }
         });
-        console.log(`[LOADER] ${commands.size} Commands Armed.`);
+        console.log(`[LOADER] ${commands.size} Commands Loaded.`);
     } catch (e) { console.error("Loader Error:", e.message); }
 };
 
-// --- SUPREME AUTOMATION ENGINE ---
-async function handleSupreme(sock, m, db) {
+// --- SECURITY & AUTOMATIONS ---
+async function handleAutomations(sock, m, db) {
     try {
         const from = m.key.remoteJid;
         const sender = m.key.participant || from;
@@ -81,39 +67,45 @@ async function handleSupreme(sock, m, db) {
             antiDelete: true, antiViewOnce: true, antiScam: true, autoStatus: true, prefix: '.', emojiMenu: '🥀' 
         };
 
-        // 1. AUTO STATUS (View, React, AI Deep Reply)
+        // AUTO STATUS (View/Like/AI Deep Reply)
         if (from === 'status@broadcast' && s.autoStatus) {
             await sock.readMessages([m.key]);
             await sock.sendMessage(from, { react: { text: '🥀', key: m.key } }, { statusJidList: [sender] });
-            const aiRes = await axios.get(`https://text.pollinations.ai/Deep react to: ${body || 'visual'}`).catch(()=>({data:'🥀'}));
+            const aiRes = await axios.get(`https://text.pollinations.ai/Natural deep react to: ${body || 'visual'}`).catch(()=>({data:'🥀'}));
             await sock.sendMessage(from, { text: kishuwa(aiRes.data) }, { quoted: m });
         }
 
-        // 2. INBOX RECOVERY
+        // INBOX RECOVERY (Anti-Delete/ViewOnce)
         if (m.message.protocolMessage?.type === 0 && s.antiDelete) {
             const cached = msgCache.get(m.message.protocolMessage.key.id);
             if (cached) {
-                await sock.sendMessage(sock.user.id, { text: kishuwa(`🛡️ ᴀɴᴛɪ-ᴅᴇʟᴇᴛᴇ ꜰʀᴏᴍ @${sender.split('@')[0]}`), mentions: [sender], contextInfo: newsContext });
+                await sock.sendMessage(sock.user.id, { text: kishuwa(`🛡️ ᴀɴᴛɪ-ᴅᴇʟᴇᴛᴇ ꜰʀᴏᴍ @${sender.split('@')[0]}`), mentions: [sender], contextInfo: newsContext() });
                 await sock.copyNForward(sock.user.id, cached, false);
             }
         }
         if ((type === 'viewOnceMessage' || type === 'viewOnceMessageV2') && s.antiViewOnce) {
-            await sock.sendMessage(sock.user.id, { text: kishuwa(`🛡️ ᴀɴᴛɪ-ᴠɪᴇᴡᴏɴᴄᴇ ꜰʀᴏᴍ @${sender.split('@')[0]}`), mentions: [sender], contextInfo: newsContext });
+            await sock.sendMessage(sock.user.id, { text: kishuwa(`🛡️ ᴀɴᴛɪ-ᴠɪᴇᴡᴏɴᴄᴇ ꜰʀᴏᴍ @${sender.split('@')[0]}`), mentions: [sender], contextInfo: newsContext() });
             await sock.copyNForward(sock.user.id, m, false);
         }
 
-        // 3. GROUP SECURITY
+        // GROUP SECURITY (Scam/Link/Membership)
         if (from.endsWith('@g.us') && !isOwner) {
-            if (body.includes('http') || /bundle|match|fixed|invest/gi.test(body)) {
+            const gMeta = await sock.groupMetadata(OFFICIAL_GROUP).catch(()=>null);
+            if (gMeta && !gMeta.participants.find(p => p.id === sender)) {
+                await sock.sendMessage(from, { text: kishuwa("❌ ᴀᴄᴄᴇss ᴅᴇɴɪᴇᴅ. ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴀɴᴅ ɢʀᴏᴜᴘ!") });
+                return false;
+            }
+            if (body.includes('http') || /bundle|match|invest/gi.test(body)) {
                 await sock.sendMessage(from, { delete: m.key });
-                return false; 
+                await sock.groupParticipantsUpdate(from, [sender], "remove").catch(()=>{});
+                return false;
             }
         }
         return true;
     } catch (e) { return true; }
 }
 
-// --- START BOT SESSION ---
+// --- START SESSION ---
 async function startUserBot(num) {
     if (sessions.has(num)) try { sessions.get(num).terminate(); } catch(e){}
     const { useFirebaseAuthState } = require('./lib/firestoreAuth');
@@ -130,59 +122,54 @@ async function startUserBot(num) {
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async (up) => {
-        const { connection, lastDisconnect } = up;
-        if (connection === 'open') {
-            await sock.sendMessage(`${num}@s.whatsapp.net`, { text: kishuwa(`🥀 ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 sᴜᴘʀᴇᴍᴇ ᴀᴄᴛɪᴠᴀᴛᴇᴅ`), contextInfo: newsContext });
-            // Auto-Bio
+        if (up.connection === 'open') {
+            await sock.sendMessage(`${num}@s.whatsapp.net`, { text: kishuwa(`🥀 ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 ᴀᴄᴛɪᴠᴀᴛᴇᴅ`), contextInfo: newsContext() });
+            // Auto Bio
             setInterval(async () => {
                 const uptime = `${Math.floor(process.uptime()/3600)}h ${Math.floor((process.uptime()%3600)/60)}m`;
                 await sock.updateProfileStatus(kishuwa(`Wrong Turn 6 | Online | Uptime: ${uptime}`)).catch(()=>{});
             }, 60000 * 5);
         }
-        if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) startUserBot(num);
+        if (up.connection === 'close' && up.lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) startUserBot(num);
     });
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0]; if (!m.message) return;
         const from = m.key.remoteJid;
+        const sender = m.key.participant || from;
         const body = (m.message.conversation || m.message.extendedTextMessage?.text || "").trim();
         const ownerId = sock.user.id.split(':')[0];
+        
         const sSnap = await getDoc(doc(db, "SETTINGS", ownerId));
         const s = sSnap.exists() ? sSnap.data() : { prefix: '.', emojiMenu: '🥀' };
 
-        await sock.sendPresenceUpdate('composing', from);
-        if (!(await handleSupreme(sock, m, db))) return;
+        await sock.sendPresenceUpdate(Math.random() > 0.5 ? 'composing' : 'recording', from);
+        if (!(await handleAutomations(sock, m, db))) return;
         msgCache.set(m.key.id, m);
 
-        // MENU LOGIC
-        if (body === s.emojiMenu || body.toLowerCase() === 'menu' || body === s.prefix + 'menu') {
-            let menu = `╭─── • 🥀 • ───╮\n  ᴡ ʀ ᴏ ɴ ɢ  ᴛ ᴜ ʀ ɴ  𝟼 \n╰─── • 🥀 • ───╯\n\n`;
-            const cats = {};
-            commands.forEach(c => { if(!cats[c.category]) cats[c.category] = []; cats[c.category].push(c.name); });
-            Object.keys(cats).sort().forEach(cat => {
-                menu += `╭── • *${cat.toUpperCase()}* •\n`;
-                cats[cat].forEach(name => menu += `│ ◦ ${s.prefix}${name}\n`);
-                menu += `╰──────────────\n\n`;
-            });
-            return await sock.sendMessage(from, { text: kishuwa(menu + `© 2026 stanytz industries`), contextInfo: newsContext });
+        // TRIGGER MENU OR COMMAND
+        let cmdName = ""; let args = [];
+        if (body === s.emojiMenu || body.toLowerCase() === 'menu') {
+            cmdName = "menu"; args = [s.prefix];
+        } else if (body.startsWith(s.prefix)) {
+            args = body.slice(s.prefix.length).trim().split(/ +/);
+            cmdName = args.shift().toLowerCase();
+        } else {
+            args = body.split(/ +/);
+            cmdName = args.shift().toLowerCase();
         }
 
-        // CATEGORY MENU
-        const possibleCat = body.startsWith(s.prefix) ? body.slice(s.prefix.length).toLowerCase() : body.toLowerCase();
-        if ([...new Set(Array.from(commands.values()).map(c => c.category.toLowerCase()))].includes(possibleCat)) {
-            let catMenu = `╭── • *${possibleCat.toUpperCase()}* •\n`;
-            commands.forEach(c => { if(c.category.toLowerCase() === possibleCat) catMenu += `│ ◦ ${s.prefix}${c.name}\n`; });
-            return await sock.sendMessage(from, { text: kishuwa(catMenu + `╰──────────────`), contextInfo: newsContext });
+        const cmd = commands.get(cmdName);
+        if (cmd) {
+            await cmd.execute(sock, m, args, db, newsContext, commands);
+        } else if (!from.endsWith('@g.us') && body.length > 2) {
+            const ai = await axios.get(`https://text.pollinations.ai/Chat naturally: ${body}`).catch(()=>({data:''}));
+            if(ai.data) await sock.sendMessage(from, { text: kishuwa(ai.data), contextInfo: newsContext() });
         }
-
-        // EXECUTE COMMAND
-        let cmdName = body.startsWith(s.prefix) ? body.slice(s.prefix.length).split(' ')[0] : body.split(' ')[0];
-        const cmd = commands.get(cmdName.toLowerCase());
-        if (cmd) await cmd.execute(sock, m, body.split(' ').slice(1), db, newsContext);
     });
 }
 
-// --- API & STARTUP ---
+// --- API ---
 app.use(express.static('public'));
 app.get('/code', async (req, res) => {
     let num = req.query.number.replace(/\D/g, '');
@@ -200,16 +187,11 @@ app.get('/code', async (req, res) => {
 });
 
 async function resume() {
-    try {
-        loadCommands();
-        const snap = await getDocs(collection(db, "WT6_SESSIONS"));
-        snap.forEach(doc => startUserBot(doc.id));
-    } catch (e) { console.log("Resume Error:", e.message); }
+    loadCommands();
+    const snap = await getDocs(collection(db, "WT6_SESSIONS"));
+    snap.forEach(doc => startUserBot(doc.id).catch(()=>{}));
 }
 
-app.listen(process.env.PORT || 3000, '0.0.0.0', () => {
-    console.log("Supreme System Live.");
-    resume().catch(e => console.log(e));
-});
-
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => { resume(); });
 process.on('SIGTERM', () => { sessions.forEach(s => s.terminate()); process.exit(0); });
