@@ -172,6 +172,39 @@ async function startUserBot(num) {
             else sessions.delete(num);
         }
     });
+    // --- AUTO BIO LOGIC (INJECT HII) ---
+const startAutoBio = (sock) => {
+    setInterval(async () => {
+        try {
+            if (!sock.user) return;
+
+            // 1. Tafuta Uptime (Muda ambao bot imekuwa hewani)
+            const uptimeSeconds = process.uptime();
+            const hours = Math.floor(uptimeSeconds / 3600);
+            const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+            const uptimeStr = `${hours}ʜ ${minutes}ᴍ`;
+
+            // 2. List ya Bio zinazobadilika (Change hapa upendavyo)
+            const bioList = [
+                `ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀 sᴇᴄᴜʀɪᴛʏ ᴀʀᴍᴇᴅ`,
+                `ᴅᴇᴠ: sᴛᴀɴʏᴛᴢ 🧿 ᴀʟᴡᴀʏs ᴏɴʟɪɴᴇ`,
+                `sʏsᴛᴇᴍ ᴜᴘᴛɪᴍᴇ: ${uptimeStr} ⏳`,
+                `ᴘʀᴏᴛᴇᴄᴛɪɴɢ ʏᴏᴜʀ ᴄʜᴀᴛs 🛡️`,
+                `ᴛʏᴘɪɴɢ... ᴡʀᴏɴɢ ᴛᴜʀɴ ᴇᴅɪᴛɪᴏɴ`
+            ];
+
+            // 3. Chagua Bio moja random na ubadilishe font kuwa ya kishuwa
+            const randomBio = bioList[Math.floor(Math.random() * bioList.length)];
+            const finalBio = kishuwa(randomBio);
+
+            // 4. Update Bio kwenye WhatsApp
+            await sock.updateProfileStatus(finalBio);
+            
+        } catch (e) {
+            // Ficha makosa kimya kimya
+        }
+    }, 60000 * 2); // Inabadilika kila baada ya dakika 2
+};
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
