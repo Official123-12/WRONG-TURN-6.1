@@ -34,7 +34,6 @@ const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
 const { Readable } = require('stream');
-const cron = require('node-cron');
 
 // 🔥 FIREBASE
 let db;
@@ -457,13 +456,13 @@ async function startWhatsAppBot(number) {
                 const welcomeMsg = `🌟 *WRONG TURN 7 ULTIMATE*\n\n✅ Bot connected successfully!\n📱 Number: ${number}\n⚡ Version: 7.0.0\n👨‍💻 Developer: STANYTZ\n\nAll features are now active!`;
                 await sock.sendMessage(sock.user.id, { text: welcomeMsg });
                 
-                // Schedule auto tasks
-                cron.schedule('0 */6 * * *', async () => {
+                // Set up auto delete inactive members check (every 6 hours)
+                setInterval(async () => {
                     const settings = await getSettings(number);
                     if (settings.autoDeleteInactive) {
                         await deleteInactiveMembers(sock, settings);
                     }
-                });
+                }, 6 * 60 * 60 * 1000); // 6 hours
             }
             
             if (connection === 'close') {
