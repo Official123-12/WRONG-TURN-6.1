@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pair WhatsApp - WRONG TURN 7</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            color: #ff0000;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            max-width: 500px;
+            margin: 50px auto;
+            border: 2px solid #ff0000;
+            border-radius: 15px;
+            padding: 30px;
+            background: rgba(0,0,0,0.9);
+        }
+        input {
+            width: 100%;
+            padding: 15px;
+            margin: 15px 0;
+            background: #111;
+            border: 1px solid #ff0000;
+            color: white;
+            border-radius: 10px;
+            font-size: 1.1em;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #ff0000;
+            color: black;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover {
+            background: #ff3333;
+            box-shadow: 0 0 20px #ff0000;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            background: rgba(255,0,0,0.1);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 PAIR WHATSAPP</h1>
+        <p>Enter your WhatsApp number with country code</p>
+        
+        <input type="text" id="number" placeholder="254712345678" />
+        <button onclick="pair()">START BOT</button>
+        
+        <div class="result" id="result"></div>
+    </div>
+
+    <script>
+        async function pair() {
+            const number = document.getElementById('number').value;
+            const result = document.getElementById('result');
+            
+            if (!number) {
+                result.style.display = 'block';
+                result.innerHTML = '⚠️ Please enter a number';
+                result.style.background = 'rgba(255,255,0,0.1)';
+                return;
+            }
+            
+            result.style.display = 'block';
+            result.innerHTML = '🔄 Starting bot...';
+            result.style.background = 'rgba(0,255,0,0.1)';
+            
+            try {
+                const response = await fetch('/api/pair', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ number })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    result.innerHTML = `✅ Bot started for ${number}<br><br>📱 Use emoji ${data.emoji || '🎰'} to open menu`;
+                } else {
+                    result.innerHTML = `❌ Error: ${data.error}`;
+                    result.style.background = 'rgba(255,0,0,0.1)';
+                }
+            } catch (error) {
+                result.innerHTML = '❌ Connection error';
+                result.style.background = 'rgba(255,0,0,0.1)';
+            }
+        }
+    </script>
+</body>
+</html>
