@@ -1,10 +1,10 @@
 {
   "name": "wrong-turn-6",
   "version": "6.0.0",
-  "description": "Wrong Turn 6 - Ultimate WhatsApp Bot",
+  "description": "Wrong Turn 6 Ultimate WhatsApp Bot",
   "main": "index.js",
   "dependencies": {
-    "xmd-baileys": "^1.0.5",
+    "@whiskeysockets/baileys": "npm:xmd-baileys@^1.0.5",
     "firebase": "^10.8.0",
     "axios": "^1.6.7",
     "pino": "^8.19.0",
@@ -13,7 +13,5 @@
     "dotenv": "^16.4.5",
     "file-type": "^16.5.3"
   },
-  "scripts": {
-    "start": "node index.js"
-  }
+  "scripts": { "start": "node index.js" }
 }
