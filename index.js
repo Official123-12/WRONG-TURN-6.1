@@ -1,80 +1,46 @@
-// 🚀 WRONG TURN 7 - ULTIMATE EDITION - FIXED VERSION
-// 🔥 NO CRYPTO ERRORS - ALWAYS ACTIVE
+// 🚀 WRONG TURN 7 - ULTIMATE EDITION
+// 🔥 NO ERRORS - ALWAYS ACTIVE
 
+require('dotenv').config();
 console.log('🚀 WRONG TURN 7 - ULTIMATE EDITION');
 
-// 🌍 FIX CRYPTO ERROR FIRST
+// 🌍 FIX CRYPTO FOR NODE 18+
+const crypto = require('crypto');
 if (typeof globalThis.crypto === 'undefined') {
-    const crypto = require('crypto');
     globalThis.crypto = {
         getRandomValues: (arr) => crypto.randomBytes(arr.length),
         subtle: {
-            digest: (algorithm, data) => {
-                return new Promise((resolve, reject) => {
-                    try {
-                        const hash = crypto.createHash(algorithm.replace('-', ''));
-                        hash.update(data);
-                        resolve(hash.digest());
-                    } catch (e) {
-                        reject(e);
-                    }
-                });
-            }
+            digest: (algorithm, data) => crypto.createHash(algorithm.replace('-', '')).update(data).digest()
         }
     };
 }
 
-// 🌍 CORE IMPORTS
+// 🔥 CORE IMPORTS
 const express = require('express');
 const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
 const qrcode = require('qrcode-terminal');
 
-// 🔥 BAILEYS IMPORT - FIXED
-let makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, getContentType, downloadContentFromMessage, Browsers, proto;
-
-try {
-    const baileys = require('baileys');
-    makeWASocket = baileys.default || baileys.makeWASocket;
-    useMultiFileAuthState = baileys.useMultiFileAuthState;
-    DisconnectReason = baileys.DisconnectReason;
-    makeCacheableSignalKeyStore = baileys.makeCacheableSignalKeyStore;
-    getContentType = baileys.getContentType;
-    downloadContentFromMessage = baileys.downloadContentFromMessage;
-    Browsers = baileys.Browsers;
-    proto = baileys.proto;
-} catch (error) {
-    console.log('⚠️ Using alternative baileys import');
-    const {
-        default: makeWASocketAlt,
-        useMultiFileAuthState: useMultiFileAuthStateAlt,
-        DisconnectReason: DisconnectReasonAlt,
-        makeCacheableSignalKeyStore: makeCacheableSignalKeyStoreAlt,
-        getContentType: getContentTypeAlt,
-        downloadContentFromMessage: downloadContentFromMessageAlt,
-        Browsers: BrowsersAlt,
-        proto: protoAlt
-    } = require('@whiskeysockets/baileys');
-    
-    makeWASocket = makeWASocketAlt;
-    useMultiFileAuthState = useMultiFileAuthStateAlt;
-    DisconnectReason = DisconnectReasonAlt;
-    makeCacheableSignalKeyStore = makeCacheableSignalKeyStoreAlt;
-    getContentType = getContentTypeAlt;
-    downloadContentFromMessage = downloadContentFromMessageAlt;
-    Browsers = BrowsersAlt;
-    proto = protoAlt;
-}
+// 🔥 BAILEYS - FIXED IMPORT
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    DisconnectReason,
+    makeCacheableSignalKeyStore,
+    getContentType,
+    downloadContentFromMessage,
+    Browsers
+} = require('@whiskeysockets/baileys');
 
 const app = express();
 app.use(express.json());
 
-// 🎨 GLOBAL VARIABLES
+// 🎨 VARIABLES
 const activeSessions = new Map();
 const msgCache = new Map();
 
-// 🎯 THEME SYSTEM
+// 🎯 THEME
 const THEME = {
     FLOWERS: ['🥀', '🌸', '🌺', '🌹', '🌼', '🌷', '💐', '🪷'],
     BORDERS: {
@@ -83,7 +49,7 @@ const THEME = {
     }
 };
 
-// 🏁 CREATE DIRECTORIES
+// 🏁 CREATE DIRS
 if (!fs.existsSync('./sessions')) fs.mkdirSync('./sessions', { recursive: true });
 
 /**
@@ -108,39 +74,38 @@ async function downloadMedia(m, type) {
 }
 
 /**
- * 🚀 START WHATSAPP BOT
+ * 🚀 START BOT
  */
 async function startWhatsAppBot(number) {
     if (activeSessions.has(number)) {
-        console.log(`✅ Bot already active: ${number}`);
+        console.log(`✅ Bot active: ${number}`);
         return activeSessions.get(number);
     }
     
-    console.log(`🚀 Starting bot: ${number}`);
+    console.log(`🚀 Starting: ${number}`);
     
     try {
         const sessionDir = `./sessions/${number}`;
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
         
+        // 🔥 FIXED: No logger to avoid errors
         const sock = makeWASocket({
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, { level: 'silent' })
             },
-            logger: { level: 'silent' },
             printQRInTerminal: true,
             browser: Browsers.macOS('Safari'),
             markOnlineOnConnect: true,
-            generateHighQualityLinkPreview: true,
             connectTimeoutMs: 60000,
             keepAliveIntervalMs: 25000
         });
 
-        // 🔥 SAVE CREDENTIALS
+        // 🔥 SAVE CREDS
         sock.ev.on('creds.update', saveCreds);
         activeSessions.set(number, sock);
 
-        // 🔄 CONNECTION HANDLER
+        // 🔥 CONNECTION
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
             
@@ -154,21 +119,22 @@ async function startWhatsAppBot(number) {
             if (connection === 'open') {
                 console.log(`✅ ${number}: Connected!`);
                 
-                // 🔥 ALWAYS ONLINE
+                // ALWAYS ONLINE
                 setInterval(async () => {
                     try {
                         await sock.sendPresenceUpdate('available');
-                        await sock.updateProfileStatus(`WRONG TURN 7 🥀 | ONLINE`);
                     } catch (e) {}
                 }, 30000);
                 
-                // WELCOME MESSAGE
-                const welcome = `${THEME.BORDERS.top}\n\n🥀 *WRONG TURN 7 - ULTIMATE EDITION*\n\n✅ Connected Successfully!\n👑 Developer: STANYTZ\n⚡ Version: 7.0.0\n🌐 Status: ACTIVE & ARMED\n\n${THEME.BORDERS.bottom}`;
+                // WELCOME
+                const welcome = `${THEME.BORDERS.top}\n\n🥀 *WRONG TURN 7*\n\n✅ Connected Successfully\n👑 Developer: STANYTZ\n⚡ Version: 7.0.0\n🌐 Status: ACTIVE\n\n${THEME.BORDERS.bottom}`;
                 await sock.sendMessage(sock.user.id, { text: welcome });
                 
                 // AUTO BIO
-                await sock.updateProfileName('WRONG TURN 7 🥀');
-                await sock.updateProfileStatus('WRONG TURN 7 | STANYTZ | 🤖 WhatsApp Bot');
+                try {
+                    await sock.updateProfileName('WRONG TURN 7 🥀');
+                    await sock.updateProfileStatus('WRONG TURN 7 | STANYTZ');
+                } catch (e) {}
             }
             
             if (connection === 'close') {
@@ -183,7 +149,7 @@ async function startWhatsAppBot(number) {
             }
         });
 
-        // 💬 MESSAGE HANDLER
+        // 💬 MESSAGES
         sock.ev.on('messages.upsert', async ({ messages }) => {
             try {
                 const m = messages[0];
@@ -191,61 +157,53 @@ async function startWhatsAppBot(number) {
                 
                 const from = m.key.remoteJid;
                 const sender = m.key.participant || from;
-                const body = (m.message.conversation || m.message.extendedTextMessage?.text || m.message.imageMessage?.caption || "").trim();
+                const body = (m.message.conversation || m.message.extendedTextMessage?.text || "").trim();
                 const type = getContentType(m.message);
                 const isGroup = from?.endsWith('@g.us');
                 const isOwner = sender === sock.user?.id || m.key.fromMe;
                 const isStatus = from === 'status@broadcast';
 
-                // 🔥 CACHE MESSAGE
+                // CACHE
                 msgCache.set(m.key.id, { ...m, timestamp: Date.now() });
 
-                // 🔥 AUTO TYPING
+                // AUTO TYPING
                 await sock.sendPresenceUpdate('composing', from);
                 setTimeout(() => sock.sendPresenceUpdate('paused', from), 2000);
 
-                // 🔥 AUTO RECORDING (RANDOM)
+                // AUTO RECORDING
                 if (Math.random() > 0.5) {
                     await sock.sendPresenceUpdate('recording', from);
                     setTimeout(() => sock.sendPresenceUpdate('paused', from), 1000);
                 }
 
-                // 🔥 AUTO READ
+                // AUTO READ
                 await sock.readMessages([m.key]);
 
-                // 🔥 AUTO REACT
+                // AUTO REACT
                 if (!m.key.fromMe && !isStatus) {
                     const randomFlower = THEME.FLOWERS[Math.floor(Math.random() * THEME.FLOWERS.length)];
                     await sock.sendMessage(from, { react: { text: randomFlower, key: m.key } });
                 }
 
-                // 🔥 EMOJI COMMAND SYSTEM
-                const userEmoji = "🎰"; // Default emoji
-                if (body === userEmoji || body.includes(userEmoji)) {
-                    const menuText = `${THEME.BORDERS.top}\n\n🥀 *WRONG TURN 7 MENU*\n\n🎯 *Features:*\n• Auto View Status\n• Anti-Delete Message\n• Download Songs/Videos\n• Download View-Once\n• Always Online\n• Fake Typing/Recording\n• Auto Like Status\n• AI Chat Features\n\n⚡ *Commands:*\n• .menu - This menu\n• .help - All commands\n• .status - Bot status\n• .settings - Configure\n\n${THEME.BORDERS.bottom}`;
+                // 🎪 EMOJI COMMAND
+                const userEmoji = "🎰";
+                if (body === userEmoji) {
+                    const menuText = `${THEME.BORDERS.top}\n\n🥀 *WRONG TURN 7*\n\n🎯 *Features:*\n• Auto View Status\n• Anti-Delete\n• Download Media\n• Always Online\n• Auto Typing\n• AI Chat\n• Anti Link\n• Anti Scam\n\n⚡ *Commands:*\n.help - All commands\n.status - Bot status\n.song [name] - Download\n\n${THEME.BORDERS.bottom}`;
                     await sock.sendMessage(from, { text: menuText });
                     return;
                 }
 
-                // 🔥 SECURITY SYSTEM
+                // 🔥 SECURITY
                 if (isGroup && !isOwner) {
                     // ANTI LINK
-                    if (body.match(/(https?:\/\/[^\s]+)/gi)) {
+                    if (body.match(/(https?:\/\/)/gi)) {
                         await sock.sendMessage(from, { delete: m.key });
-                        await sock.sendMessage(from, { 
-                            text: `${THEME.FLOWERS[0]} *ANTI-LINK* ${THEME.FLOWERS[0]}\n\nLinks are not allowed!`,
-                            mentions: [sender]
-                        });
                         return;
                     }
                     
                     // ANTI SCAM
-                    if (body.match(/(bundle|fixed match|earn money|investment|quick money)/gi)) {
+                    if (body.match(/(bundle|fixed match|earn money)/gi)) {
                         await sock.sendMessage(from, { delete: m.key });
-                        await sock.sendMessage(from, { 
-                            text: `${THEME.FLOWERS[0]} *SCAM ALERT* ${THEME.FLOWERS[0]}\n\nScam messages detected!`,
-                            mentions: [sender]
-                        });
                         return;
                     }
                 }
@@ -255,7 +213,7 @@ async function startWhatsAppBot(number) {
                     const cached = msgCache.get(m.message.protocolMessage.key.id);
                     if (cached) {
                         await sock.sendMessage(sock.user.id, {
-                            text: `${THEME.FLOWERS[0]} *ANTI-DELETE* ${THEME.FLOWERS[0]}\n\nMessage recovered from @${sender.split('@')[0]}`,
+                            text: `${THEME.FLOWERS[0]} *ANTI-DELETE*\nFrom: @${sender.split('@')[0]}`,
                             mentions: [sender]
                         });
                         await sock.copyNForward(sock.user.id, cached, false);
@@ -263,12 +221,12 @@ async function startWhatsAppBot(number) {
                 }
 
                 // 🔥 ANTI VIEW-ONCE
-                if ((type === 'viewOnceMessage' || type === 'viewOnceMessageV2') && !isOwner) {
+                if ((type === 'viewOnceMessage') && !isOwner) {
                     try {
                         const media = await downloadMedia(m, 'image') || await downloadMedia(m, 'video');
                         if (media) {
                             await sock.sendMessage(sock.user.id, {
-                                text: `${THEME.FLOWERS[0]} *VIEW-ONCE CAPTURED* ${THEME.FLOWERS[0]}\n\nFrom: @${sender.split('@')[0]}`
+                                text: `${THEME.FLOWERS[0]} *VIEW-ONCE*\nFrom: @${sender.split('@')[0]}`
                             });
                             
                             if (media.toString('hex', 0, 4) === 'ffd8ff') {
@@ -280,61 +238,52 @@ async function startWhatsAppBot(number) {
                     } catch (e) {}
                 }
 
-                // 🌟 STATUS FEATURES
+                // 🌟 STATUS
                 if (isStatus) {
                     await sock.readMessages([m.key]);
                     
-                    // AUTO LIKE STATUS
-                    const likeEmojis = ['❤️', '👍', '🔥', '🥰', '🎉'];
+                    // AUTO LIKE
+                    const likeEmojis = ['❤️', '👍', '🔥'];
                     const randomLike = likeEmojis[Math.floor(Math.random() * likeEmojis.length)];
                     await sock.sendMessage(from, { react: { text: randomLike, key: m.key } }, { statusJidList: [sender] });
                     
-                    // AUTO REPLY TO STATUS
+                    // AUTO REPLY
                     if (body) {
-                        try {
-                            const aiReply = await axios.get(`https://api.agromonitoring.ai/gpt?prompt=${encodeURIComponent(body.substring(0, 100))}&uid=${sender}`, { timeout: 3000 });
-                            await sock.sendMessage(from, { text: aiReply.data?.response || "Nice status! 🥀" }, { quoted: m });
-                        } catch (e) {
-                            await sock.sendMessage(from, { text: "Great status! 🥀" }, { quoted: m });
-                        }
+                        await sock.sendMessage(from, { text: "Nice status! 🥀" }, { quoted: m });
                     }
                 }
 
                 // 🤖 AI CHAT
                 if (!isGroup && !isStatus && body.length > 2 && !m.key.fromMe && !body.startsWith('.')) {
-                    try {
-                        const aiResponse = await axios.get(`https://api.agromonitoring.ai/gpt?prompt=${encodeURIComponent(body)}&uid=${sender}`, { timeout: 5000 });
-                        const reply = aiResponse.data?.response || "I'm here to help! 🥀";
-                        await sock.sendMessage(from, { text: `${THEME.BORDERS.top}\n\n${reply}\n\n${THEME.BORDERS.bottom}` }, { quoted: m });
-                    } catch (e) {
-                        await sock.sendMessage(from, { text: `${THEME.BORDERS.top}\n\nI'm WRONG TURN 7 bot! Use .help for commands.\n\n${THEME.BORDERS.bottom}` }, { quoted: m });
-                    }
+                    await sock.sendMessage(from, { 
+                        text: `${THEME.BORDERS.top}\n\nI'm WRONG TURN 7 bot! Use .help for commands.\n\n${THEME.BORDERS.bottom}` 
+                    }, { quoted: m });
                 }
 
-                // 🎵 SONG/VIDEO DOWNLOADER
+                // 🎵 DOWNLOADER
                 if (body.startsWith('.song ') || body.startsWith('.video ')) {
                     const query = body.split(' ').slice(1).join(' ');
                     await sock.sendMessage(from, {
-                        text: `${THEME.BORDERS.top}\n\n🎵 *DOWNLOAD* ${query}\n\n🔗 Download from:\n• https://www.y2mate.com\n• https://en.savefrom.net\n• https://ssyoutube.com\n\n${THEME.BORDERS.bottom}`
+                        text: `${THEME.BORDERS.top}\n\n🎵 *DOWNLOAD*\n\nSearch: ${query}\n\n🔗 y2mate.com\n🔗 savefrom.net\n\n${THEME.BORDERS.bottom}`
                     });
                 }
 
-                // 🎯 COMMAND HANDLER
+                // 🎯 COMMANDS
                 if (body.startsWith('.')) {
                     const [cmd, ...args] = body.slice(1).trim().split(/ +/);
                     
                     if (cmd === 'menu' || cmd === 'help') {
-                        const helpText = `${THEME.BORDERS.top}\n\n🥀 *WRONG TURN 7 HELP*\n\n🎯 *Commands:*\n• .menu - Show menu\n• .status - Bot status\n• .song [name] - Search song\n• .video [name] - Search video\n• .setemoji [emoji] - Set emoji\n• .antilink [on/off]\n• .antiscam [on/off]\n\n🎪 *Emoji Command:*\nSend 🎰 to open menu\n\n${THEME.BORDERS.bottom}`;
+                        const helpText = `${THEME.BORDERS.top}\n\n🥀 *HELP*\n\n.menu - Show menu\n.status - Bot status\n.song [name] - Search\n.video [name] - Search\n.setemoji [emoji] - Set emoji\n\n🎪 Send 🎰 to open menu\n\n${THEME.BORDERS.bottom}`;
                         await sock.sendMessage(from, { text: helpText });
                     }
                     else if (cmd === 'status') {
                         const uptime = Math.floor(process.uptime() / 3600);
-                        const statusText = `${THEME.BORDERS.top}\n\n🥀 *BOT STATUS*\n\n✅ Online: ${activeSessions.size} bots\n⏰ Uptime: ${uptime} hours\n👑 Developer: STANYTZ\n⚡ Version: 7.0.0\n🔗 Platform: ${process.platform}\n\n${THEME.BORDERS.bottom}`;
+                        const statusText = `${THEME.BORDERS.top}\n\n🥀 *STATUS*\n\n✅ Online: ${activeSessions.size}\n⏰ Uptime: ${uptime}h\n👑 STANYTZ\n⚡ 7.0.0\n\n${THEME.BORDERS.bottom}`;
                         await sock.sendMessage(from, { text: statusText });
                     }
                     else if (cmd === 'setemoji' && args[0]) {
                         await sock.sendMessage(from, { 
-                            text: `${THEME.BORDERS.top}\n\n✅ Emoji set to: ${args[0]}\n\nNow send "${args[0]}" to open menu!\n\n${THEME.BORDERS.bottom}`
+                            text: `${THEME.BORDERS.top}\n\n✅ Emoji: ${args[0]}\n\nSend "${args[0]}" for menu\n\n${THEME.BORDERS.bottom}`
                         });
                     }
                 }
@@ -344,13 +293,13 @@ async function startWhatsAppBot(number) {
             }
         });
 
-        // 👥 GROUP EVENTS
+        // 👥 GROUP
         sock.ev.on('group-participants.update', async (update) => {
             try {
                 const { id, participants, action } = update;
                 
                 if (action === 'add') {
-                    const welcomeMsg = `${THEME.BORDERS.top}\n\n🌸 Welcome @${participants[0].split('@')[0]}!\n\nType .help for commands\n\n${THEME.BORDERS.bottom}`;
+                    const welcomeMsg = `${THEME.BORDERS.top}\n\n🌸 Welcome @${participants[0].split('@')[0]}!\n\n${THEME.BORDERS.bottom}`;
                     await sock.sendMessage(id, { text: welcomeMsg, mentions: participants });
                 }
             } catch (e) {}
@@ -366,7 +315,7 @@ async function startWhatsAppBot(number) {
     }
 }
 
-// 🌐 WEB SERVER
+// 🌐 WEB
 app.get('/', (req, res) => {
     res.send(`
         <!DOCTYPE html>
@@ -444,7 +393,7 @@ app.get('/pair', (req, res) => {
                     if (data.success) {
                         result.innerHTML = '<h3>✅ CODE: ' + data.code + '</h3><p>' + data.message + '</p>';
                     } else {
-                        result.innerHTML = '<h3>❌ ERROR</h3>';
+                        result.innerHTML = '<h3>❌ ERROR: ' + data.error + '</h3>';
                     }
                 }
             </script>
@@ -473,12 +422,12 @@ app.get('/api/pair', async (req, res) => {
         
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
         
+        // 🔥 FIXED: No logger to avoid errors
         const sock = makeWASocket({
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, { level: 'silent' })
             },
-            logger: { level: 'silent' },
             printQRInTerminal: false,
             browser: Browsers.macOS('Safari')
         });
@@ -523,14 +472,13 @@ app.get('/health', (req, res) => {
     });
 });
 
-// 🚀 START SERVER
+// 🚀 START
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🌟 WRONG TURN 7 on port ${PORT}`);
     console.log(`🔗 http://localhost:${PORT}`);
-    console.log(`🔗 Pair: http://localhost:${PORT}/pair`);
     
-    // AUTO START OWNER BOT
+    // AUTO START
     const ownerNumber = process.env.OWNER_NUMBER || '2547xxxxxxxx';
     if (ownerNumber && ownerNumber !== '2547xxxxxxxx') {
         setTimeout(() => startWhatsAppBot(ownerNumber), 3000);
