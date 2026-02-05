@@ -1,21 +1,22 @@
 require('dotenv').config();
 const { 
     default: makeWASocket, 
+    useMultiFileAuthState, 
     DisconnectReason, 
     makeCacheableSignalKeyStore,
     getContentType,
-    downloadContentFromMessage,
-    generateForwardMessageContent,
-    prepareWAMessageMedia
+    fetchLatestBaileysVersion,
+    Browsers
 } = require('@whiskeysockets/baileys');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, deleteDoc } = require('firebase/firestore');
+const { getFirestore, doc, getDoc, setDoc, updateDoc, collection } = require('firebase/firestore');
+const express = require('express');
 const pino = require('pino');
 const axios = require('axios');
+const path = require('path');
 const fs = require('fs-extra');
-const express = require('express');
 
-// --- FIREBASE CONFIGURATION ---
+// --- FIREBASE CONFIG ---
 const firebaseConfig = {
     apiKey: "AIzaSyDt3nPKKcYJEtz5LhGf31-5-jI5v31fbPc",
     authDomain: "stanybots.firebaseapp.com",
@@ -25,77 +26,126 @@ const firebaseConfig = {
     appId: "1:381983533939:web:e6cc9445137c74b99df306"
 };
 
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
+const fApp = initializeApp(firebaseConfig);
+const db = getFirestore(fApp);
 const app = express();
 
-// --- GLOBAL VARIABLES & CACHE ---
+// --- GLOBALS ---
 const msgCache = new Map();
 const newsletterJid = '120363404317544295@newsletter';
 const supportGroup = '120363406549688641@g.us';
 
-const fContext = {
-    isForwarded: true,
-    forwardingScore: 999,
-    forwardedNewsletterMessageInfo: {
-        newsletterJid: newsletterJid,
-        serverMessageId: 1,
-        newsletterName: 'ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟽 🥀'
-    }
-};
-
-const style = {
+const theme = {
     p: (t) => `╭── • 🥀 • ──╮\n${t}\n╰── • 🥀 • ──╯`,
-    footer: `\n\n└──────────────\nᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ 🥀`
+    footer: `\n\n└──────────────\nᴅᴇᴠᴇʟᴏᴘᴇʀ: ꜱᴛᴀɴʏᴛᴢ 🥀`,
+    fContext: {
+        isForwarded: true,
+        forwardingScore: 999,
+        forwardedNewsletterMessageInfo: {
+            newsletterJid: newsletterJid,
+            serverMessageId: 1,
+            newsletterName: 'ᴡʀᴏɴɢ ᴛᴜʀɴ 𝟼 🥀'
+        }
+    }
 };
 
-// --- AUTHENTICATION (FIREBASE SESSION) ---
-async function useFirebaseAuthState(docId) {
-    let creds;
-    const docRef = doc(db, "SESSIONS", docId);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-        creds = JSON.parse(JSON.stringify(snap.data()), (k, v) => (v?.type === 'Buffer' ? Buffer.from(v.data, 'base64') : v));
-    } else {
-        const { initAuthCreds } = require('@whiskeysockets/baileys');
-        creds = initAuthCreds();
-    }
-    return {
-        state: { creds, keys: makeCacheableSignalKeyStore(creds.keys || {}, pino({ level: 'silent' })) },
-        saveCreds: async () => {
-            const safeCreds = JSON.parse(JSON.stringify(creds, (k, v) => (Buffer.isBuffer(v) ? { type: 'Buffer', data: v.toString('base64') } : v)));
-            await setDoc(docRef, safeCreds);
-        }
-    };
-}
+// --- WEB SERVER & PAIRING UI ---
+app.use(express.static('public'));
+app.get('/', (req, res) => {
+    res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>WRONG TURN 6 - PAIRING</title>
+        <style>
+            body { background: #000; color: #ff0000; font-family: 'Courier New', monospace; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+            .card { border: 2px solid #ff0000; padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 0 20px #ff0000; background: #0a0a0a; width: 90%; max-width: 400px; }
+            input { width: 100%; padding: 12px; margin: 15px 0; border: 1px solid #ff0000; background: #000; color: #fff; border-radius: 5px; box-sizing: border-box; }
+            button { background: #ff0000; color: #000; border: none; padding: 12px 25px; cursor: pointer; font-weight: bold; border-radius: 5px; width: 100%; }
+            #code { font-size: 2rem; margin-top: 20px; color: #fff; letter-spacing: 5px; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>🥀 WRONG TURN 6</h1>
+            <p>Enter your phone number (with country code)</p>
+            <input type="text" id="number" placeholder="e.g. 255712345678">
+            <button onclick="getCode()">GET PAIRING CODE</button>
+            <div id="code"></div>
+        </div>
+        <script>
+            async function getCode() {
+                const num = document.getElementById('number').value;
+                const display = document.getElementById('code');
+                display.innerText = "GENERATING...";
+                try {
+                    const res = await fetch('/api/pair?number=' + num);
+                    const data = await res.json();
+                    display.innerText = data.code || "ERROR";
+                } catch (e) { display.innerText = "FAILED"; }
+            }
+        </script>
+    </body>
+    </html>
+    `);
+});
 
-// --- CORE BOT FUNCTION ---
-async function startBot() {
-    const { state, saveCreds } = await useFirebaseAuthState("MASTER_SESSION");
-    
+// --- API TO GENERATE PAIRING CODE ---
+app.get('/api/pair', async (req, res) => {
+    const number = req.query.number;
+    if (!number) return res.json({ error: "No number" });
+
+    const { state, saveCreds } = await useMultiFileAuthState('./sessions/' + number);
     const sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: true,
-        browser: ["WrongTurn-7", "Safari", "3.0"],
-        markOnlineOnConnect: true
+        browser: Browsers.macOS("Safari")
+    });
+
+    if (!state.creds.registered) {
+        try {
+            const code = await sock.requestPairingCode(number);
+            res.json({ code });
+            
+            // Start the bot for this user once paired
+            sock.ev.on('creds.update', saveCreds);
+            sock.ev.on('connection.update', (u) => {
+                if (u.connection === 'open') {
+                    console.log("✅ Device linked: " + number);
+                    // Save session to Firebase here for persistence
+                    saveSessionToFirebase(number, state.creds);
+                    startBotEngine(number);
+                }
+            });
+        } catch (e) { res.json({ error: e.message }); }
+    }
+});
+
+// --- FIREBASE SESSION PERSISTENCE ---
+async function saveSessionToFirebase(number, creds) {
+    const docRef = doc(db, "WT6_SESSIONS", number);
+    const safeCreds = JSON.parse(JSON.stringify(creds, (k, v) => Buffer.isBuffer(v) ? v.toString('base64') : v));
+    await setDoc(docRef, { creds: safeCreds, updatedAt: Date.now() });
+}
+
+// --- MAIN BOT ENGINE ---
+async function startBotEngine(number) {
+    const { state, saveCreds } = await useMultiFileAuthState('./sessions/' + number);
+    const sock = makeWASocket({
+        auth: state,
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false,
+        markOnlineOnConnect: true,
+        browser: ["WrongTurn-6", "Chrome", "1.0.0"]
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Connection Logic
-    sock.ev.on('connection.update', (u) => {
-        if (u.connection === 'open') console.log("✅ SYSTEM ONLINE: WRONG TURN 7 IS ACTIVE");
-        if (u.connection === 'close' && u.lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) startBot();
-    });
-
-    // --- MESSAGE HANDLER ---
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
-        if (!m.message || m.key.remoteJid === 'status@broadcast') {
-            if (m.key.remoteJid === 'status@broadcast') handleStatus(sock, m);
-            return;
-        }
+        if (!m.message) return;
 
         const from = m.key.remoteJid;
         const sender = m.key.participant || from;
@@ -104,161 +154,84 @@ async function startBot() {
         const isOwner = m.key.fromMe || sender.split('@')[0] === sock.user.id.split(':')[0];
         const isGroup = from.endsWith('@g.us');
 
-        // Fetch Settings from Firebase
-        const settings = await getSettings(from);
-        const userEmojiMap = await getEmojiConfig(sock.user.id.split(':')[0]);
-
-        // 1. CACHE FOR ANTI-DELETE
+        // CACHE FOR ANTI-DELETE
         msgCache.set(m.key.id, m);
 
-        // 2. FORCE JOIN CHECK (Must follow channel & group)
-        if (!isOwner && !isGroup) {
-            const isFollowing = await checkFollow(sock, sender);
-            if (!isFollowing) return sock.sendMessage(from, { text: style.p("❌ ACCESS DENIED\n\nYou must join our Channel and Support Group to use this bot!\n\nChannel: https://whatsapp.com/channel/0029VaP0V\nGroup: https://chat.whatsapp.com/J19JAS") });
+        // SETTINGS FETCH
+        const settings = await getDoc(doc(db, "WT6_SETTINGS", from)).then(d => d.exists() ? d.data() : { antiLink: true, antiPorn: true, autoAI: true, antiDelete: true });
+
+        // --- EMOJI COMMAND SYSTEM ---
+        const emojiMaps = await getDoc(doc(db, "WT6_EMOJIS", sock.user.id.split(':')[0])).then(d => d.exists() ? d.data() : { "🥀": "menu" });
+        if (emojiMaps[body.trim()]) {
+            return runCommand(emojiMaps[body.trim()], sock, m, from, sender, settings);
         }
 
-        // 3. EMOJI COMMAND SYSTEM
-        if (userEmojiMap[body.trim()]) {
-            return executeCommand(userEmojiMap[body.trim()], sock, m, from, sender, [], settings);
-        }
-
-        // 4. SECURITY SYSTEM (ANTI-LINK, PORN, SCAM, MEDIA)
+        // --- SECURITY SYSTEM ---
         if (isGroup && !isOwner) {
-            await runSecurity(sock, m, from, sender, body, type, settings);
+            const warnUser = async (reason) => {
+                await sock.sendMessage(from, { delete: m.key });
+                await sock.sendMessage(from, { text: theme.p(`⚠️ *SECURITY ACTION*\n\nUser: @${sender.split('@')[0]}\nReason: ${reason}\n\n_System Armed by WT6_`), mentions: [sender] });
+            };
+
+            if (settings.antiLink && /https?:\/\/[^\s]+/gi.test(body)) return warnUser("Links are not allowed!");
+            if (settings.antiPorn && /(porn|xxx|sex|🔞|nude)/gi.test(body)) return warnUser("Adult content detected!");
+            if (settings.antiScam && /(bundle|invest|free money|fixed)/gi.test(body)) return warnUser("Scam keywords detected!");
         }
 
-        // 5. ANTI-DELETE & ANTI-VIEW ONCE
+        // --- ANTI-DELETE ---
         if (m.message.protocolMessage?.type === 0 && settings.antiDelete) {
-            const oldMsg = msgCache.get(m.message.protocolMessage.key.id);
-            if (oldMsg) {
-                await sock.sendMessage(sock.user.id, { text: `🛡️ *ANTI-DELETE DETECTED*\nFrom: @${sender.split('@')[0]}`, mentions: [sender] });
-                await sock.copyNForward(sock.user.id, oldMsg, false, { contextInfo: fContext });
+            const old = msgCache.get(m.message.protocolMessage.key.id);
+            if (old) {
+                await sock.sendMessage(sock.user.id, { text: `🛡️ *RECOVERED MESSAGE* from @${sender.split('@')[0]}`, mentions: [sender] });
+                await sock.copyNForward(sock.user.id, old, false, { contextInfo: theme.fContext });
             }
         }
-        if ((type === 'viewOnceMessage' || type === 'viewOnceMessageV2') && settings.antiViewOnce) {
-            await sock.sendMessage(sock.user.id, { text: `🛡️ *VIEW-ONCE BYPASSED*` });
-            await sock.copyNForward(sock.user.id, m, false, { contextInfo: fContext });
-        }
 
-        // 6. AUTO AI CHAT
-        if (!isGroup && !body.startsWith('.') && settings.autoAI && !m.key.fromMe) {
+        // --- AI CHAT (REPLIES AS HUMAN IN USER LANGUAGE) ---
+        if (!isGroup && !body.startsWith('.') && settings.autoAI && !m.key.fromMe && body.length > 1) {
             await sock.sendPresenceUpdate('composing', from);
-            const aiReply = await getAI(body, sender);
-            await sock.sendMessage(from, { text: style.p(aiReply) + style.footer, contextInfo: fContext }, { quoted: m });
+            const aiPrompt = `You are WRONG TURN 6, a helpful WhatsApp bot. Reply in a natural, human-like way in the SAME language the user is using. User said: "${body}"`;
+            try {
+                const res = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(aiPrompt)}`);
+                await sock.sendMessage(from, { text: theme.p(res.data) + theme.footer, contextInfo: theme.fContext }, { quoted: m });
+            } catch (e) {}
         }
 
-        // 7. AUTO TYPING / RECORDING
-        if (settings.autoType) await sock.sendPresenceUpdate('composing', from);
-        if (settings.autoRecord) await sock.sendPresenceUpdate('recording', from);
+        // --- STATUS SYSTEM ---
+        if (from === 'status@broadcast') {
+            await sock.readMessages([m.key]);
+            await sock.sendMessage(from, { react: { text: '❤️', key: m.key } }, { statusJidList: [sender] });
+        }
 
-        // 8. PREFIX COMMANDS
+        // --- COMMANDS ---
         if (body.startsWith('.')) {
-            const [cmd, ...args] = body.slice(1).trim().split(/ +/);
-            await executeCommand(cmd.toLowerCase(), sock, m, from, sender, args, settings);
+            const cmd = body.slice(1).trim().split(' ')[0].toLowerCase();
+            runCommand(cmd, sock, m, from, sender, settings);
         }
     });
+}
 
-    // --- AUTO STATUS VIEW & REACT ---
-    async function handleStatus(sock, m) {
-        const sender = m.key.participant;
-        await sock.readMessages([m.key]);
-        const emojis = ['❤️', '🔥', '🙌', '🥀', '💯', '⚡'];
-        await sock.sendMessage('status@broadcast', { react: { text: emojis[Math.floor(Math.random()*emojis.length)], key: m.key } }, { statusJidList: [sender] });
-        
-        // Deep Thinking Status Reply
-        const aiStatusReply = await getAI(`Analyze and give a very short friendly reply to this status update: "${m.message?.conversation || 'image/video status'}"`);
-        await sock.sendMessage(m.key.remoteJid, { text: aiStatusReply }, { quoted: m });
+async function runCommand(cmd, sock, m, from, sender, s) {
+    const reply = (t) => sock.sendMessage(from, { text: theme.p(t) + theme.footer, contextInfo: theme.fContext }, { quoted: m });
+
+    if (cmd === 'menu') {
+        return reply(`*WRONG TURN 6 - MENU*\n\n◦ .settings\n◦ .kick\n◦ .active\n◦ .setemoji [emoji] [cmd]\n◦ .ai [query]`);
+    }
+    
+    if (cmd === 'setemoji') {
+        const args = m.message.conversation.split(' ');
+        if (args.length < 3) return reply("Use: .setemoji 🥀 menu");
+        await setDoc(doc(db, "WT6_EMOJIS", sock.user.id.split(':')[0]), { [args[1]]: args[2] }, { merge: true });
+        reply(`✅ Success! Emoji ${args[1]} now triggers ${args[2]}`);
     }
 }
 
-// --- SECURITY LOGIC ---
-async function runSecurity(sock, m, from, sender, body, type, s) {
-    const warn = async (reason, remove = false) => {
-        await sock.sendMessage(from, { delete: m.key });
-        await sock.sendMessage(from, { text: `⚠️ *SECURITY WARNING*\n\nUser: @${sender.split('@')[0]}\nAction: Message Deleted\nReason: ${reason}\n\n_System managed by Wrong Turn 7_`, mentions: [sender] });
-        if (remove && s.autoKick) await sock.groupParticipantsUpdate(from, [sender], "remove");
-    };
-
-    if (s.antiLink && /https?:\/\/[^\s]+/gi.test(body)) return warn("Posting links is strictly prohibited!", s.kickOnLink);
-    if (s.antiPorn && /(porn|xxx|sex|ngono|🔞|nude)/gi.test(body)) return warn("Adult content detected!", true);
-    if (s.antiScam && /(bundle|fixed match|invest|crypto|giveaway)/gi.test(body)) return warn("Scam/Fraudulent keywords detected!", s.kickOnScam);
-    if (s.antiMedia && (type === 'imageMessage' || type === 'videoMessage' || type === 'audioMessage')) return warn("Media sharing is disabled in this group.");
-    if (s.antiTag && body.includes('@everyone') || (m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 10)) return warn("Mass tagging detected!");
-}
-
-// --- COMMAND EXECUTION ---
-async function executeCommand(cmd, sock, m, from, sender, args, s) {
-    const reply = (txt) => sock.sendMessage(from, { text: style.p(txt) + style.footer, contextInfo: fContext }, { quoted: m });
-
-    switch (cmd) {
-        case 'menu':
-            const menu = `*WRONG TURN 7 ULTIMATE*\n\n◦ .settings (Manage Bot)\n◦ .ai [query]\n◦ .kick @user\n◦ .promote @user\n◦ .delete\n◦ .setemoji [emoji] [cmd]\n◦ .active (Group Stats)\n◦ .song [name]\n◦ .video [name]`;
-            reply(menu);
-            break;
-
-        case 'settings':
-            if (!m.key.fromMe) return;
-            const setMenu = `*BOT SETTINGS*\n\n1. Anti-Link: ${s.antiLink ? 'ON' : 'OFF'}\n2. Anti-Delete: ${s.antiDelete ? 'ON' : 'OFF'}\n3. Auto-AI: ${s.autoAI ? 'ON' : 'OFF'}\n4. Anti-Porn: ${s.antiPorn ? 'ON' : 'OFF'}\n\nTo toggle use: .set [feature] [on/off]`;
-            reply(setMenu);
-            break;
-
-        case 'setemoji':
-            if (args.length < 2) return reply("Usage: .setemoji 🥀 menu");
-            await setDoc(doc(db, "USER_EMOJIS", sock.user.id.split(':')[0]), { [args[0]]: args[1] }, { merge: true });
-            reply(`✅ Link Success: Emoji ${args[0]} will now trigger ${args[1]}`);
-            break;
-
-        case 'ai':
-            const res = await getAI(args.join(' '), sender);
-            reply(res);
-            break;
-
-        case 'song':
-        case 'video':
-            reply(`⏳ Fetching your ${cmd}... Please wait.`);
-            // Integration for downloaders would go here
-            break;
-
-        case 'active':
-            const stats = await sock.groupMetadata(from);
-            reply(`📊 *GROUP STATS*\n\nGroup: ${stats.subject}\nMembers: ${stats.participants.length}\nBot Status: Admin`);
-            break;
-            
-        case 'kick':
-            if (!s.isAdmin) return reply("Bot must be admin!");
-            const target = m.message.extendedTextMessage?.contextInfo?.mentionedJid[0];
-            await sock.groupParticipantsUpdate(from, [target], "remove");
-            reply("👤 User removed successfully.");
-            break;
+// Start Server
+app.listen(process.env.PORT || 3000, () => {
+    console.log("🚀 Server running on port 3000");
+    // Resume existing sessions from local or firebase if needed
+    if (fs.existsSync('./sessions')) {
+        const users = fs.readdirSync('./sessions');
+        users.forEach(u => startBotEngine(u));
     }
-}
-
-// --- DATABASE & API HELPERS ---
-async function getSettings(jid) {
-    const d = await getDoc(doc(db, "SETTINGS", jid));
-    return d.exists() ? d.data() : { antiLink: true, antiDelete: true, autoAI: true, antiViewOnce: true, antiPorn: true, antiScam: true, autoStatus: true };
-}
-
-async function getEmojiConfig(uid) {
-    const d = await getDoc(doc(db, "USER_EMOJIS", uid));
-    return d.exists() ? d.data() : { "🥀": "menu" };
-}
-
-async function getAI(q, user) {
-    try {
-        const r = await axios.get(`https://text.pollinations.ai/Respond naturally as WRONG TURN 7 Bot in user's language to: ${encodeURIComponent(q)}`);
-        return r.data;
-    } catch { return "Service temporarily unavailable. 🥀"; }
-}
-
-async function checkFollow(sock, jid) {
-    try {
-        // Logic check for Newsletter & Group membership
-        const group = await sock.groupMetadata(supportGroup);
-        return group.participants.some(p => p.id === jid);
-    } catch { return false; }
-}
-
-// START SERVER
-app.get('/', (req, res) => res.send("Wrong Turn 7 - Ultimate Active"));
-app.listen(process.env.PORT || 3000, () => startBot());
+});
