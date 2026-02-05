@@ -1,105 +1,61 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Pair WhatsApp - WRONG TURN 7</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WRONG TURN 6 | MAINFRAME LINK</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: #000;
-            color: #ff0000;
-            font-family: 'Courier New', monospace;
-            padding: 20px;
-            text-align: center;
-        }
-        .container {
-            max-width: 500px;
-            margin: 50px auto;
-            border: 2px solid #ff0000;
-            border-radius: 15px;
-            padding: 30px;
-            background: rgba(0,0,0,0.9);
-        }
-        input {
-            width: 100%;
-            padding: 15px;
-            margin: 15px 0;
-            background: #111;
-            border: 1px solid #ff0000;
-            color: white;
-            border-radius: 10px;
-            font-size: 1.1em;
-        }
-        button {
-            width: 100%;
-            padding: 15px;
-            background: #ff0000;
-            color: black;
-            border: none;
-            border-radius: 10px;
-            font-size: 1.2em;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-        button:hover {
-            background: #ff3333;
-            box-shadow: 0 0 20px #ff0000;
-        }
-        .result {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 10px;
-            background: rgba(255,0,0,0.1);
-            display: none;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
+        body { background: radial-gradient(circle at center, #1a0505 0%, #000000 100%); color: #ffffff; font-family: 'Outfit', sans-serif; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; user-select: none; }
+        .iphone-mainframe { width: 360px; height: 760px; background: #050505; border: 10px solid #1a1a1a; border-radius: 60px; position: relative; backdrop-filter: blur(30px); box-shadow: 0 0 60px rgba(255, 0, 0, 0.2); display: flex; flex-direction: column; padding: 25px; border-bottom: 15px solid #1a1a1a; }
+        .dynamic-island { width: 120px; height: 35px; background: #000; border-radius: 20px; margin: 0 auto 30px; box-shadow: 0 0 10px rgba(255,0,0,0.1); }
+        .bot-logo { width: 110px; height: 110px; border-radius: 50%; border: 3px solid #ff0000; box-shadow: 0 0 25px #ff0000; object-fit: cover; margin: 0 auto 15px; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        input { width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,0,0,0.2); border-radius: 15px; padding: 15px; color: #fff; text-align: center; outline: none; font-size: 1.2rem; transition: 0.3s; }
+        input:focus { border-color: #ff0000; background: rgba(255,0,0,0.05); }
+        .btn-link { width: 100%; padding: 18px; background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%); border-radius: 18px; font-weight: 800; margin-top: 25px; text-transform: uppercase; letter-spacing: 2px; box-shadow: 0 10px 20px rgba(255, 0, 0, 0.3); }
+        #pairing-code { font-family: monospace; font-size: 2.8rem; color: #00ff00; font-weight: 900; letter-spacing: 6px; text-shadow: 0 0 20px #00ff00; display: none; cursor: pointer; text-align: center; margin-top: 30px; }
+        .stats-footer { margin-top: auto; font-size: 0.7rem; color: #555; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1>🔗 PAIR WHATSAPP</h1>
-        <p>Enter your WhatsApp number with country code</p>
-        
-        <input type="text" id="number" placeholder="254712345678" />
-        <button onclick="pair()">START BOT</button>
-        
-        <div class="result" id="result"></div>
-    </div>
+<body oncontextmenu="return false;">
+    <div class="iphone-mainframe">
+        <div class="dynamic-island"></div>
+        <img src="https://files.catbox.moe/59ays3.jpg" class="bot-logo">
+        <h1 class="text-center text-xl font-bold tracking-[6px] text-red-600">WRONG TURN 6</h1>
+        <p class="text-center text-[10px] text-gray-500 uppercase tracking-widest mb-10">Developed by STANYTZ</p>
 
+        <div id="input-area">
+            <input type="number" id="num" placeholder="255XXXXXXXXX">
+            <button onclick="get()" id="btn" class="btn-link">LINK SYSTEM</button>
+        </div>
+
+        <div id="pairing-code" onclick="copy()">--------</div>
+
+        <div class="stats-footer">
+            <div class="flex justify-between"><span>STATUS:</span><span class="text-green-500">ONLINE 🥀</span></div>
+            <div class="flex justify-between"><span>ACTIVE NODES:</span><span class="text-white">1,509</span></div>
+            <div class="flex justify-between"><span>UPTIME:</span><span class="text-white">99.9%</span></div>
+        </div>
+    </div>
     <script>
-        async function pair() {
-            const number = document.getElementById('number').value;
-            const result = document.getElementById('result');
-            
-            if (!number) {
-                result.style.display = 'block';
-                result.innerHTML = '⚠️ Please enter a number';
-                result.style.background = 'rgba(255,255,0,0.1)';
-                return;
-            }
-            
-            result.style.display = 'block';
-            result.innerHTML = '🔄 Starting bot...';
-            result.style.background = 'rgba(0,255,0,0.1)';
-            
-            try {
-                const response = await fetch('/api/pair', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ number })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    result.innerHTML = `✅ Bot started for ${number}<br><br>📱 Use emoji ${data.emoji || '🎰'} to open menu`;
-                } else {
-                    result.innerHTML = `❌ Error: ${data.error}`;
-                    result.style.background = 'rgba(255,0,0,0.1)';
-                }
-            } catch (error) {
-                result.innerHTML = '❌ Connection error';
-                result.style.background = 'rgba(255,0,0,0.1)';
-            }
+        async function get() {
+            const n = document.getElementById('num').value;
+            if(!n) return alert("Enter Number!");
+            document.getElementById('btn').innerText = "CONNECTING...";
+            const res = await fetch('/code?number=' + n);
+            const data = await res.json();
+            if(data.code) {
+                document.getElementById('input-area').style.display = 'none';
+                document.getElementById('pairing-code').style.display = 'block';
+                document.getElementById('pairing-code').innerText = data.code;
+            } else { alert("System Busy. Refresh."); }
+        }
+        function copy() {
+            navigator.clipboard.writeText(document.getElementById('pairing-code').innerText);
+            alert("Code Copied.");
         }
     </script>
 </body>
