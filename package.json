@@ -1,18 +1,22 @@
 {
-  "name": "wrong-turn-6-railway",
-  "version": "6.6.6",
+  "name": "wrong-turn-7",
+  "version": "7.0.0",
+  "description": "Ultimate WhatsApp Bot with All Features",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "npm:angularsockets@1.4.5",
-    "firebase": "^10.7.1",
-    "express": "^4.19.2",
-    "pino": "^8.21.0",
-    "axios": "^1.6.8",
-    "fs-extra": "^11.2.0",
-    "jimp": "^0.22.10",
-    "dotenv": "^16.4.5"
+    "@whiskeysockets/baileys": "^6.5.0",
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "fs-extra": "^11.1.1",
+    "pino": "^8.15.0",
+    "dotenv": "^16.3.1",
+    "firebase": "^10.6.0",
+    "qrcode-terminal": "^0.12.0",
+    "form-data": "^4.0.0",
+    "crypto": "^1.0.1"
   }
 }
