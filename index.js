@@ -22,7 +22,7 @@ const {
     downloadContentFromMessage,
     proto,
     Browsers
-} = require('xmd-baileys');
+} = require('@whiskeysockets/baileys');
 
 const express = require('express');
 const pino = require('pino');
