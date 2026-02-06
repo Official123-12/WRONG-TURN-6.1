@@ -1,62 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WRONG TURN 6 | MAINFRAME LINK</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
-        body { background: radial-gradient(circle at center, #1a0505 0%, #000000 100%); color: #ffffff; font-family: 'Outfit', sans-serif; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; user-select: none; }
-        .iphone-mainframe { width: 360px; height: 760px; background: #050505; border: 10px solid #1a1a1a; border-radius: 60px; position: relative; backdrop-filter: blur(30px); box-shadow: 0 0 60px rgba(255, 0, 0, 0.2); display: flex; flex-direction: column; padding: 25px; border-bottom: 15px solid #1a1a1a; }
-        .dynamic-island { width: 120px; height: 35px; background: #000; border-radius: 20px; margin: 0 auto 30px; box-shadow: 0 0 10px rgba(255,0,0,0.1); }
-        .bot-logo { width: 110px; height: 110px; border-radius: 50%; border: 3px solid #ff0000; box-shadow: 0 0 25px #ff0000; object-fit: cover; margin: 0 auto 15px; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
-        input { width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,0,0,0.2); border-radius: 15px; padding: 15px; color: #fff; text-align: center; outline: none; font-size: 1.2rem; transition: 0.3s; }
-        input:focus { border-color: #ff0000; background: rgba(255,0,0,0.05); }
-        .btn-link { width: 100%; padding: 18px; background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%); border-radius: 18px; font-weight: 800; margin-top: 25px; text-transform: uppercase; letter-spacing: 2px; box-shadow: 0 10px 20px rgba(255, 0, 0, 0.3); }
-        #pairing-code { font-family: monospace; font-size: 2.8rem; color: #00ff00; font-weight: 900; letter-spacing: 6px; text-shadow: 0 0 20px #00ff00; display: none; cursor: pointer; text-align: center; margin-top: 30px; }
-        .stats-footer { margin-top: auto; font-size: 0.7rem; color: #555; }
-    </style>
+<meta charset="UTF-8">
+<title>WRONG TURN 6</title>
+<style>
+body{font-family:sans-serif;background:#f0f0f0;text-align:center;padding:50px;}
+h1{color:#333;}
+input,button{padding:10px;margin:5px;border-radius:5px;border:1px solid #ccc;}
+.float-btn{position:fixed;bottom:20px;right:20px;background:#25D366;color:#fff;padding:15px 20px;border-radius:50px;text-decoration:none;font-weight:bold;box-shadow:0 4px 6px rgba(0,0,0,0.2);}
+.channel-btn{position:fixed;bottom:80px;right:20px;background:#007BFF;color:#fff;padding:12px 18px;border-radius:50px;text-decoration:none;font-weight:bold;box-shadow:0 4px 6px rgba(0,0,0,0.2);}
+</style>
 </head>
-<body oncontextmenu="return false;">
-    <div class="iphone-mainframe">
-        <div class="dynamic-island"></div>
-        <img src="https://files.catbox.moe/59ays3.jpg" class="bot-logo">
-        <h1 class="text-center text-xl font-bold tracking-[6px] text-red-600">WRONG TURN 6</h1>
-        <p class="text-center text-[10px] text-gray-500 uppercase tracking-widest mb-10">Developed by STANYTZ</p>
+<body>
+<h1>WRONG TURN 6 – Premium Bot</h1>
+<p>Enter your number to get official 8-digit WhatsApp pairing code:</p>
 
-        <div id="input-area">
-            <input type="number" id="num" placeholder="255XXXXXXXXX">
-            <button onclick="get()" id="btn" class="btn-link">LINK SYSTEM</button>
-        </div>
+<input type="text" id="userNumber" placeholder="Enter your number">
+<button onclick="getCode()">Get Code</button>
 
-        <div id="pairing-code" onclick="copy()">--------</div>
+<p id="pairingCode"></p>
 
-        <div class="stats-footer">
-            <div class="flex justify-between"><span>STATUS:</span><span class="text-green-500">ONLINE 🥀</span></div>
-            <div class="flex justify-between"><span>ACTIVE NODES:</span><span class="text-white">1,509</span></div>
-            <div class="flex justify-between"><span>UPTIME:</span><span class="text-white">99.9%</span></div>
-        </div>
-    </div>
-    <script>
-        async function get() {
-            const n = document.getElementById('num').value;
-            if(!n) return alert("Enter Number!");
-            document.getElementById('btn').innerText = "CONNECTING...";
-            const res = await fetch('/code?number=' + n);
-            const data = await res.json();
-            if(data.code) {
-                document.getElementById('input-area').style.display = 'none';
-                document.getElementById('pairing-code').style.display = 'block';
-                document.getElementById('pairing-code').innerText = data.code;
-            } else { alert("System Busy. Refresh."); }
-        }
-        function copy() {
-            navigator.clipboard.writeText(document.getElementById('pairing-code').innerText);
-            alert("Code Copied.");
-        }
-    </script>
+<a class="channel-btn" href="https://whatsapp.com/channel/0029Vb72cVkJ3jv10gzqTn18" target="_blank">Follow Channel</a>
+<a class="float-btn" href="https://wa.me/255618558502" target="_blank">Chat Admin</a>
+
+<script>
+async function getCode(){
+  const number = document.getElementById('userNumber').value
+  if(!number){ alert('Enter your number'); return }
+  try{
+    const res = await fetch('/pair',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ number })
+    })
+    const data = await res.json()
+    if(data.code){
+      document.getElementById('pairingCode').innerText = 'Your 8-digit code: '+data.code
+    }else{
+      document.getElementById('pairingCode').innerText = data.error || 'Error getting code'
+    }
+  }catch(e){
+    document.getElementById('pairingCode').innerText = 'Error: '+e.message
+  }
+}
+</script>
 </body>
 </html>
